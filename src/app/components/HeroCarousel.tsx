@@ -1,12 +1,14 @@
 'use client';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import AppImage from '@/components/ui/AppImage';
-import { Play, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Check, Play, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useProfiles } from '@/context/ProfileContext';
 
 const HERO_ITEMS = [
 {
-  id: 'hero-the-last-of-us',
+  id: 'the-last-of-us',
+  maturityLevel: 16,
   title: 'THE LAST OF US',
   type: 'SÉRIE',
   network: 'HBO',
@@ -20,7 +22,8 @@ const HERO_ITEMS = [
   href: '/movie-series-detail?id=the-last-of-us'
 },
 {
-  id: 'hero-dune-part-two',
+  id: 'dune-part-two',
+  maturityLevel: 13,
   title: 'DUNE: PART TWO',
   type: 'FILM',
   network: null,
@@ -34,7 +37,8 @@ const HERO_ITEMS = [
   href: '/movie-series-detail?id=dune-part-two'
 },
 {
-  id: 'hero-oppenheimer',
+  id: 'oppenheimer',
+  maturityLevel: 13,
   title: 'OPPENHEIMER',
   type: 'FILM',
   network: null,
@@ -48,7 +52,8 @@ const HERO_ITEMS = [
   href: '/movie-series-detail?id=oppenheimer'
 },
 {
-  id: 'hero-breaking-bad',
+  id: 'breaking-bad',
+  maturityLevel: 18,
   title: 'BREAKING BAD',
   type: 'SÉRIE',
   network: 'AMC',
@@ -62,10 +67,25 @@ const HERO_ITEMS = [
   href: '/movie-series-detail?id=breaking-bad'
 }];
 
+const KIDS_HERO = {
+  id: 'inside-out-2', maturityLevel: 7, title: 'VICE-VERSA 2', type: 'FILM', network: null,
+  year: '2024', seasons: '1h 36min', genres: ['Animation', 'Famille'], rating: '7+',
+  synopsis: "Les émotions de Riley accueillent de nouveaux visiteurs alors qu'elle entre dans l'adolescence.",
+  backdropPath: 'https://image.tmdb.org/t/p/original/p5ozvmdgsmbWe0H8Xk7Rc8SCwAB.jpg',
+  posterPath: 'https://image.tmdb.org/t/p/w500/vpnVM9B6NMmQpWeZvzLvDESb2QY.jpg',
+  href: '/movie-series-detail?id=inside-out-2',
+};
+
 
 export default function HeroCarousel() {
+  const { selectedProfile, toggleWatchlist } = useProfiles();
   const [current, setCurrent] = useState(0);
   const [transitioning, setTransitioning] = useState(false);
+  const visibleItems = useMemo(() => {
+    if (!selectedProfile) return HERO_ITEMS;
+    const filtered = HERO_ITEMS.filter((item) => item.maturityLevel <= selectedProfile.maturityLevel);
+    return filtered.length ? filtered : [KIDS_HERO];
+  }, [selectedProfile]);
 
   const goTo = useCallback((index: number) => {
     if (transitioning) return;
@@ -76,15 +96,18 @@ export default function HeroCarousel() {
     }, 300);
   }, [transitioning]);
 
-  const prev = () => goTo((current - 1 + HERO_ITEMS.length) % HERO_ITEMS.length);
-  const next = useCallback(() => goTo((current + 1) % HERO_ITEMS.length), [current, goTo]);
+  const prev = () => goTo((current - 1 + visibleItems.length) % visibleItems.length);
+  const next = useCallback(() => goTo((current + 1) % visibleItems.length), [current, goTo, visibleItems.length]);
+
+  useEffect(() => setCurrent(0), [selectedProfile?.id]);
 
   useEffect(() => {
     const timer = setInterval(next, 7000);
     return () => clearInterval(timer);
   }, [next]);
 
-  const item = HERO_ITEMS[current];
+  const item = visibleItems[current] ?? visibleItems[0];
+  const inList = selectedProfile?.watchlist.includes(item.id) ?? false;
 
   return (
     <div className="relative w-full h-[85vh] min-h-[560px] max-h-[900px] overflow-hidden">
@@ -156,9 +179,9 @@ export default function HeroCarousel() {
                 <Play size={16} fill="white" />
                 Regarder
               </Link>
-              <button className="btn-secondary text-sm">
-                <Plus size={16} />
-                Ma liste
+              <button className="btn-secondary text-sm" onClick={() => toggleWatchlist(item.id)}>
+                {inList ? <Check size={16} /> : <Plus size={16} />}
+                {inList ? 'Dans ma liste' : 'Ma liste'}
               </button>
             </div>
           </div>
@@ -183,7 +206,7 @@ export default function HeroCarousel() {
 
       {/* Dots */}
       <div className="absolute bottom-20 left-1/2 -translate-x-1/2 flex items-center gap-2 z-20">
-        {HERO_ITEMS.map((_, i) =>
+        {visibleItems.map((_, i) =>
         <button
           key={`hero-dot-${i}`}
           onClick={() => goTo(i)}

@@ -19,7 +19,7 @@ interface MovieRowProps {
   seeAllHref?: string;
 }
 
-export default function MovieRow({ title, movies, seeAllHref = '/films-s-ries-catalog' }: MovieRowProps) {
+export default function MovieRow({ title, movies, seeAllHref = '/films-series-catalog' }: MovieRowProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);

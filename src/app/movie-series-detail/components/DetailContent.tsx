@@ -1,8 +1,11 @@
 'use client';
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import AppImage from '@/components/ui/AppImage';
-import { Play, Plus, Star, Clock, Globe, User, Film, ChevronLeft } from 'lucide-react';
+import { Check, Play, Plus, Star, Clock, Globe, User, Film, ChevronLeft } from 'lucide-react';
+import { useProfiles } from '@/context/ProfileContext';
+import { CONTENT_CATALOG } from '@/lib/content';
 
 // Backend integration point: replace with TMDB API fetch by ID from searchParams
 const MOVIE_DATA = {
@@ -47,8 +50,26 @@ const TABS = [
 
 export default function DetailContent() {
   const [activeTab, setActiveTab] = useState('apropos');
-  const [inList, setInList] = useState(false);
-  const movie = MOVIE_DATA;
+  const searchParams = useSearchParams();
+  const { selectedProfile, toggleWatchlist, updateProgress } = useProfiles();
+  const requestedId = searchParams.get('id') ?? 'dune-part-two';
+  const catalogItem = CONTENT_CATALOG.find((item) => item.id === requestedId);
+  const movie = catalogItem ? {
+    ...MOVIE_DATA,
+    id: catalogItem.id,
+    title: catalogItem.title,
+    originalTitle: catalogItem.title.toUpperCase(),
+    year: catalogItem.year,
+    duration: `${Math.floor(catalogItem.durationSeconds / 3600)}h ${Math.floor((catalogItem.durationSeconds % 3600) / 60)}min`,
+    genres: catalogItem.genres,
+    ageRating: `${catalogItem.maturityLevel}+`,
+    rating: catalogItem.rating,
+    backdropPath: catalogItem.backdropPath,
+    posterPath: catalogItem.posterPath,
+    mediaType: catalogItem.mediaType,
+  } : MOVIE_DATA;
+  const inList = selectedProfile?.watchlist.includes(movie.id) ?? false;
+  const progress = selectedProfile?.history.find((item) => item.mediaId === movie.id);
 
   return (
     <div className="pb-24 md:pb-4">
@@ -134,15 +155,15 @@ export default function DetailContent() {
 
                 {/* Buttons */}
                 <div className="flex flex-wrap items-center gap-3">
-                  <button className="btn-primary">
+                  <button className="btn-primary" onClick={() => updateProgress(movie.id, Math.min((progress?.positionSeconds ?? 0) + 300, catalogItem?.durationSeconds ?? 9960), catalogItem?.durationSeconds ?? 9960)}>
                     <Play size={18} fill="white" />
-                    Regarder
+                    {progress ? 'Reprendre' : 'Regarder'}
                   </button>
                   <button
-                    onClick={() => setInList(!inList)}
+                    onClick={() => toggleWatchlist(movie.id)}
                     className={`btn-secondary ${inList ? 'border-primary/60 text-primary' : ''}`}
                   >
-                    <Plus size={18} className={inList ? 'text-primary' : ''} />
+                    {inList ? <Check size={18} className="text-primary" /> : <Plus size={18} />}
                     {inList ? 'Dans ma liste' : 'Ma liste'}
                   </button>
                 </div>

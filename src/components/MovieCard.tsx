@@ -2,7 +2,8 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import AppImage from '@/components/ui/AppImage';
-import { Play, Plus, Info, Star } from 'lucide-react';
+import { Check, Heart, Play, Plus, Star } from 'lucide-react';
+import { useProfiles } from '@/context/ProfileContext';
 
 interface MovieCardProps {
   id: string;
@@ -16,7 +17,10 @@ interface MovieCardProps {
 
 export default function MovieCard({ id, title, posterPath, year, rating, mediaType, href }: MovieCardProps) {
   const [hovered, setHovered] = useState(false);
+  const { selectedProfile, toggleWatchlist, toggleFavorite } = useProfiles();
   const detailHref = href || `/movie-series-detail?id=${id}`;
+  const inList = selectedProfile?.watchlist.includes(id) ?? false;
+  const favorite = selectedProfile?.favorites.includes(id) ?? false;
 
   return (
     <Link href={detailHref} className="block">
@@ -64,17 +68,17 @@ export default function MovieCard({ id, title, posterPath, year, rating, mediaTy
               </button>
               <button
                 className="w-8 h-8 rounded-full bg-white/20 border border-white/40 flex items-center justify-center hover:bg-white/30 transition-colors"
-                aria-label={`Ajouter ${title} à ma liste`}
-                onClick={(e) => e.preventDefault()}
+                aria-label={inList ? `Retirer ${title} de ma liste` : `Ajouter ${title} à ma liste`}
+                onClick={(e) => { e.preventDefault(); toggleWatchlist(id); }}
               >
-                <Plus size={14} className="text-white" />
+                {inList ? <Check size={14} className="text-white" /> : <Plus size={14} className="text-white" />}
               </button>
               <button
                 className="w-8 h-8 rounded-full bg-white/20 border border-white/40 flex items-center justify-center hover:bg-white/30 transition-colors ml-auto"
-                aria-label={`Détails de ${title}`}
-                onClick={(e) => e.preventDefault()}
+                aria-label={favorite ? `Retirer ${title} des favoris` : `Ajouter ${title} aux favoris`}
+                onClick={(e) => { e.preventDefault(); toggleFavorite(id); }}
               >
-                <Info size={14} className="text-white" />
+                <Heart size={14} fill={favorite ? 'white' : 'none'} className="text-white" />
               </button>
             </div>
             <div className="flex items-center gap-1">
