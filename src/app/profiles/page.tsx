@@ -1,0 +1,236 @@
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Check, LockKeyhole, Pencil, Plus, ShieldCheck, Trash2, X } from 'lucide-react';
+import ProfileAvatar, { AVATAR_OPTIONS } from '@/components/ProfileAvatar';
+import { useProfiles } from '@/context/ProfileContext';
+import type { CineverseProfile, ProfileDraft } from '@/lib/profile-types';
+
+const GENRES = ['Action', 'Animation', 'Aventure', 'Crime', 'Drame', 'Famille', 'Fantastique', 'Mystère', 'Science-fiction', 'Thriller'];
+
+const EMPTY_DRAFT: ProfileDraft = {
+  name: '', avatar: 'ember', isKids: false, maturityLevel: 18, preferences: [], parentalPin: '',
+};
+
+export default function ProfilesPage() {
+  const router = useRouter();
+  const { profiles, ready, persistenceMode, selectProfile, createProfile, updateProfile, deleteProfile } = useProfiles();
+  const [managing, setManaging] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingProfile, setEditingProfile] = useState<CineverseProfile | null>(null);
+  const [draft, setDraft] = useState<ProfileDraft>(EMPTY_DRAFT);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  useEffect(() => {
+    document.body.style.overflow = editorOpen ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [editorOpen]);
+
+  const openCreate = () => {
+    setEditingProfile(null);
+    setDraft({ ...EMPTY_DRAFT, avatar: AVATAR_OPTIONS[profiles.length % AVATAR_OPTIONS.length].id });
+    setConfirmDelete(false);
+    setEditorOpen(true);
+  };
+
+  const openEdit = (profile: CineverseProfile) => {
+    setEditingProfile(profile);
+    setDraft({ name: profile.name, avatar: profile.avatar, isKids: profile.isKids, maturityLevel: profile.maturityLevel, preferences: [...profile.preferences], parentalPin: '' });
+    setConfirmDelete(false);
+    setEditorOpen(true);
+  };
+
+  const chooseProfile = (profile: CineverseProfile) => {
+    if (managing) return openEdit(profile);
+    selectProfile(profile.id);
+    router.push('/');
+  };
+
+  const saveProfile = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!draft.name.trim()) return;
+    if (editingProfile) updateProfile(editingProfile.id, draft);
+    else createProfile(draft);
+    setEditorOpen(false);
+  };
+
+  const togglePreference = (genre: string) => {
+    setDraft((current) => ({
+      ...current,
+      preferences: current.preferences.includes(genre)
+        ? current.preferences.filter((item) => item !== genre)
+        : [...current.preferences, genre],
+    }));
+  };
+
+  if (!ready) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-[#050608]">
+        <div className="text-center">
+          <div className="font-display text-3xl"><span className="text-primary">CINE</span>VERSE</div>
+          <div className="mx-auto mt-5 size-7 animate-spin rounded-full border-2 border-white/15 border-t-primary" />
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="relative flex min-h-screen flex-col overflow-hidden bg-[#050608] text-white">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_-10%,rgba(229,9,20,0.13),transparent_38%)]" />
+      <header className="relative flex h-20 items-center justify-between px-5 sm:px-8 lg:px-12">
+        <button type="button" onClick={() => router.push('/')} className="font-display text-2xl leading-none" aria-label="Accueil CINEVERSE">
+          <span className="text-primary">CINE</span><span>VERSE</span>
+        </button>
+        <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${persistenceMode === 'database' ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300' : 'border-white/10 bg-white/5 text-muted-foreground'}`}>
+          {persistenceMode === 'database' ? 'Synchronisé' : 'Mode local'}
+        </span>
+      </header>
+
+      <section className="relative flex flex-1 items-center justify-center px-5 pb-24 pt-8">
+        <div className="w-full max-w-5xl text-center">
+          <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl md:text-5xl">Qui regarde&nbsp;?</h1>
+          <p className="mx-auto mt-3 max-w-lg text-sm text-muted-foreground sm:text-base">
+            Choisissez votre profil pour retrouver votre sélection et reprendre vos programmes.
+          </p>
+
+          <div className="mx-auto mt-10 flex max-w-4xl flex-wrap justify-center gap-x-6 gap-y-8 sm:mt-12 sm:gap-x-8">
+            {profiles.map((profile) => (
+              <button
+                key={profile.id}
+                type="button"
+                onClick={() => chooseProfile(profile)}
+                className="group w-[126px] sm:w-[150px]"
+                aria-label={managing ? `Modifier le profil ${profile.name}` : `Continuer avec ${profile.name}`}
+              >
+                <span className="relative block aspect-square overflow-hidden rounded-2xl border-2 border-transparent shadow-[0_18px_45px_rgba(0,0,0,0.35)] transition-all duration-300 group-hover:-translate-y-1 group-hover:border-white group-hover:shadow-[0_22px_60px_rgba(0,0,0,0.55)]">
+                  <ProfileAvatar avatar={profile.avatar} name={profile.name} className="size-full" />
+                  {managing && (
+                    <span className="absolute inset-0 grid place-items-center bg-black/60 backdrop-blur-[2px]">
+                      <span className="grid size-12 place-items-center rounded-full border border-white/30 bg-black/40">
+                        <Pencil size={22} />
+                      </span>
+                    </span>
+                  )}
+                  {profile.isKids && (
+                    <span className="absolute bottom-2 left-2 rounded-md bg-black/65 px-2 py-1 text-[10px] font-extrabold uppercase tracking-wider">Kids</span>
+                  )}
+                </span>
+                <span className="mt-3 block truncate text-base font-semibold text-[#b7b7bd] transition-colors group-hover:text-white sm:text-lg">
+                  {profile.name}
+                </span>
+                {profile.isKids && <span className="mt-0.5 block text-[11px] text-emerald-400/80">Mode protégé</span>}
+              </button>
+            ))}
+
+            {profiles.length < 5 && (
+              <button type="button" onClick={openCreate} className="group w-[126px] sm:w-[150px]" aria-label="Créer un profil">
+                <span className="grid aspect-square place-items-center rounded-2xl border-2 border-dashed border-white/20 bg-white/[0.035] text-muted-foreground transition-all duration-300 group-hover:-translate-y-1 group-hover:border-primary group-hover:bg-primary/10 group-hover:text-white">
+                  <Plus size={50} strokeWidth={1.35} />
+                </span>
+                <span className="mt-3 block text-base font-semibold text-[#b7b7bd] transition-colors group-hover:text-white sm:text-lg">Ajouter</span>
+              </button>
+            )}
+          </div>
+
+          {profiles.length === 0 && (
+            <div className="mx-auto mt-8 max-w-md rounded-xl border border-white/10 bg-white/[0.03] p-5 text-sm text-muted-foreground">
+              Aucun profil pour le moment. Créez votre premier profil pour commencer.
+            </div>
+          )}
+
+          {profiles.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setManaging((value) => !value)}
+              className={`mt-12 inline-flex items-center gap-2 rounded-lg border px-5 py-2.5 text-sm font-bold transition-all ${managing ? 'border-primary bg-primary text-white' : 'border-white/20 text-[#c7c7cb] hover:border-white/50 hover:text-white'}`}
+            >
+              {managing ? <Check size={17} /> : <Pencil size={17} />}
+              {managing ? 'Terminer' : 'Gérer les profils'}
+            </button>
+          )}
+        </div>
+      </section>
+
+      {editorOpen && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/80 p-0 backdrop-blur-sm sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="profile-editor-title">
+          <form onSubmit={saveProfile} className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-2xl border border-white/10 bg-[#101318] shadow-2xl sm:rounded-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 sm:px-6">
+              <h2 id="profile-editor-title" className="text-xl font-extrabold">{editingProfile ? 'Modifier le profil' : 'Créer un profil'}</h2>
+              <button type="button" onClick={() => setEditorOpen(false)} className="grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-white/10 hover:text-white" aria-label="Fermer"><X size={20} /></button>
+            </div>
+
+            <div className="space-y-6 p-5 sm:p-6">
+              <div>
+                <label htmlFor="profile-name" className="mb-2 block text-sm font-semibold">Nom du profil</label>
+                <input id="profile-name" autoFocus maxLength={24} value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Ex. Alex" className="search-input" />
+              </div>
+
+              <fieldset>
+                <legend className="mb-3 text-sm font-semibold">Avatar</legend>
+                <div className="flex flex-wrap gap-3">
+                  {AVATAR_OPTIONS.map((option) => (
+                    <button key={option.id} type="button" onClick={() => setDraft((current) => ({ ...current, avatar: option.id }))} className={`relative size-16 overflow-hidden rounded-xl border-2 transition-all ${draft.avatar === option.id ? 'border-primary ring-4 ring-primary/15' : 'border-transparent hover:border-white/60'}`} aria-label={`Avatar ${option.label}`}>
+                      <ProfileAvatar avatar={option.id} name={option.label} className="size-full" />
+                      {draft.avatar === option.id && <span className="absolute right-1 top-1 grid size-5 place-items-center rounded-full bg-primary"><Check size={12} strokeWidth={3} /></span>}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+
+              <div className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input type="checkbox" checked={draft.isKids} onChange={(event) => setDraft((current) => ({ ...current, isKids: event.target.checked, maturityLevel: event.target.checked ? 10 : 18, avatar: event.target.checked ? 'mint' : current.avatar }))} className="mt-1 rounded border-white/20 bg-black text-primary focus:ring-primary" />
+                  <span>
+                    <span className="flex items-center gap-2 text-sm font-bold"><ShieldCheck size={17} className="text-emerald-400" /> Profil enfant</span>
+                    <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">Masque automatiquement les contenus dépassant la classification autorisée.</span>
+                  </span>
+                </label>
+                {draft.isKids && (
+                  <div className="mt-4 grid gap-4 border-t border-white/10 pt-4 sm:grid-cols-2">
+                    <label className="text-xs font-semibold text-[#c8c8cc]">Classification maximale
+                      <select value={draft.maturityLevel} onChange={(event) => setDraft((current) => ({ ...current, maturityLevel: Number(event.target.value) }))} className="filter-select mt-2 w-full">
+                        <option value={7}>7+</option><option value={10}>10+</option>
+                      </select>
+                    </label>
+                    <label className="text-xs font-semibold text-[#c8c8cc]">Code parental
+                      <div className="relative mt-2"><LockKeyhole size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><input inputMode="numeric" maxLength={4} value={draft.parentalPin} onChange={(event) => setDraft((current) => ({ ...current, parentalPin: event.target.value.replace(/\D/g, '') }))} placeholder={editingProfile ? 'Inchangé' : '4 chiffres'} className="search-input py-2.5 pl-9" /></div>
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              <fieldset>
+                <legend className="mb-3 text-sm font-semibold">Préférences</legend>
+                <div className="flex flex-wrap gap-2">
+                  {GENRES.map((genre) => {
+                    const selected = draft.preferences.includes(genre);
+                    return <button key={genre} type="button" onClick={() => togglePreference(genre)} className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${selected ? 'border-primary bg-primary/15 text-white' : 'border-white/10 bg-white/[0.03] text-muted-foreground hover:text-white'}`}>{genre}</button>;
+                  })}
+                </div>
+              </fieldset>
+
+              {editingProfile && (
+                <div className="border-t border-white/10 pt-5">
+                  {confirmDelete ? (
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-500/25 bg-red-500/10 p-3">
+                      <p className="text-xs text-red-100">Supprimer ce profil et toutes ses données&nbsp;?</p>
+                      <div className="flex gap-2"><button type="button" onClick={() => setConfirmDelete(false)} className="rounded-md px-3 py-1.5 text-xs font-bold text-white/70 hover:bg-white/10">Annuler</button><button type="button" onClick={() => { deleteProfile(editingProfile.id); setEditorOpen(false); }} className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-bold">Supprimer</button></div>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => setConfirmDelete(true)} className="inline-flex items-center gap-2 text-sm font-semibold text-red-400 hover:text-red-300"><Trash2 size={16} /> Supprimer le profil</button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 border-t border-white/10 px-5 py-4 sm:px-6">
+              <button type="button" onClick={() => setEditorOpen(false)} className="rounded-lg px-4 py-2 text-sm font-bold text-muted-foreground hover:bg-white/5 hover:text-white">Annuler</button>
+              <button type="submit" disabled={!draft.name.trim()} className="rounded-lg bg-primary px-5 py-2 text-sm font-bold text-white transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-40">Enregistrer</button>
+            </div>
+          </form>
+        </div>
+      )}
+    </main>
+  );
+}

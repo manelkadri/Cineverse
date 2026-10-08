@@ -1,0 +1,75 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String    @id @default(cuid())
+  providerUserId    String    @unique
+  selectedProfileId String?
+  profiles          Profile[]
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+model Profile {
+  id               String            @id
+  userId           String
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name             String
+  avatar           String
+  isKids           Boolean           @default(false)
+  maturityLevel    Int               @default(18)
+  preferences      String[]          @default([])
+  parentalPinHash  String?
+  watchlist        WatchlistItem[]
+  favorites        FavoriteItem[]
+  viewingHistory   ViewingActivity[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([userId])
+}
+
+model WatchlistItem {
+  id        String   @id @default(cuid())
+  profileId String
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  mediaId   String
+  mediaType String
+  addedAt   DateTime @default(now())
+
+  @@unique([profileId, mediaId])
+  @@index([profileId, addedAt])
+}
+
+model FavoriteItem {
+  id        String   @id @default(cuid())
+  profileId String
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  mediaId   String
+  mediaType String
+  addedAt   DateTime @default(now())
+
+  @@unique([profileId, mediaId])
+  @@index([profileId, addedAt])
+}
+
+model ViewingActivity {
+  id              String   @id @default(cuid())
+  profileId       String
+  profile         Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  mediaId         String
+  mediaType       String
+  positionSeconds Int      @default(0)
+  durationSeconds Int
+  completed       Boolean  @default(false)
+  lastWatchedAt   DateTime @default(now())
+
+  @@unique([profileId, mediaId])
+  @@index([profileId, lastWatchedAt])
+}
