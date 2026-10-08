@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Play } from 'lucide-react';
 import AppImage from './ui/AppImage';
 import type { ContentItem, ViewingProgress } from '@/lib/profile-types';
+import { mediaDetailHref } from '@/lib/media-id';
 
 export default function ContinueWatchingRow({ items }: { items: Array<{ content: ContentItem; progress: ViewingProgress }> }) {
   if (!items.length) return null;
@@ -16,7 +17,7 @@ export default function ContinueWatchingRow({ items }: { items: Array<{ content:
           const percent = Math.min(100, Math.round((progress.positionSeconds / progress.durationSeconds) * 100));
           const minutes = Math.max(1, Math.ceil((progress.durationSeconds - progress.positionSeconds) / 60));
           return (
-            <Link key={content.id} href={`/movie-series-detail?id=${content.id}`} className="group w-[250px] shrink-0 sm:w-[300px] lg:w-[340px]">
+            <Link key={content.id} href={mediaDetailHref(content.id)} className="group w-[250px] shrink-0 sm:w-[300px] lg:w-[340px]">
               <div className="relative aspect-video overflow-hidden rounded-lg border border-white/10 bg-card shadow-lg">
                 <AppImage src={content.backdropPath} alt={content.title} fill sizes="340px" className="object-cover transition-transform duration-500 group-hover:scale-105" />
                 <div className="absolute inset-0 bg-black/20 transition-colors group-hover:bg-black/40" />

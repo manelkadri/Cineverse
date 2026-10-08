@@ -2,25 +2,27 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Bell, Check, ChevronDown, CircleHelp, Home, ListVideo, LogOut, Menu, Pencil, Search, Settings, UserRound, X } from 'lucide-react';
 import ProfileAvatar from './ProfileAvatar';
 import { useProfiles } from '@/context/ProfileContext';
 
 const navigation = [
   { label: 'Accueil', href: '/' },
-  { label: 'Films', href: '/films-series-catalog' },
-  { label: 'Séries', href: '/films-series-catalog' },
+  { label: 'Films', href: '/films-series-catalog?type=movie' },
+  { label: 'Séries', href: '/films-series-catalog?type=tv' },
   { label: 'Ma liste', href: '/my-list' },
 ];
 
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { profiles, selectedProfile, selectProfile } = useProfiles();
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchValue, setSearchValue] = useState('');
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
 
@@ -49,7 +51,8 @@ export default function Navbar() {
 
   const isActive = (label: string, href: string) => {
     if (label === 'Accueil') return pathname === '/';
-    if (label === 'Films') return pathname === href;
+    if (label === 'Films') return pathname === '/films-series-catalog' && searchParams.get('type') !== 'tv';
+    if (label === 'Séries') return pathname === '/films-series-catalog' && searchParams.get('type') === 'tv';
     if (label === 'Ma liste') return pathname === href;
     return false;
   };
@@ -83,7 +86,7 @@ export default function Navbar() {
 
             <div className="flex items-center gap-1 sm:gap-2">
               {searchOpen ? (
-                <div className="flex items-center gap-2 rounded-full border border-white/20 bg-black/65 px-3 py-2"><Search size={20} className="shrink-0 text-[#d6d6d8]" /><input autoFocus type="search" placeholder="Rechercher..." className="w-28 bg-transparent text-sm text-white outline-none placeholder:text-[#85858b] sm:w-40" onBlur={() => setSearchOpen(false)} onKeyDown={(event) => { if (event.key === 'Escape') setSearchOpen(false); }} /></div>
+                <form onSubmit={(event) => { event.preventDefault(); const query = searchValue.trim(); if (query) { router.push(`/films-series-catalog?q=${encodeURIComponent(query)}`); setSearchOpen(false); } }} className="flex items-center gap-2 rounded-full border border-white/20 bg-black/65 px-3 py-2"><Search size={20} className="shrink-0 text-[#d6d6d8]" /><input autoFocus type="search" value={searchValue} onChange={(event) => setSearchValue(event.target.value)} placeholder="Rechercher..." className="w-28 bg-transparent text-sm text-white outline-none placeholder:text-[#85858b] sm:w-40" onKeyDown={(event) => { if (event.key === 'Escape') setSearchOpen(false); }} /></form>
               ) : (
                 <button type="button" onClick={() => setSearchOpen(true)} className="grid size-10 place-items-center rounded-full text-[#d6d6d8] hover:bg-white/10 hover:text-white" aria-label="Rechercher"><Search size={24} /></button>
               )}
@@ -107,7 +110,7 @@ export default function Navbar() {
                     <div className="border-t border-white/[0.08] p-2">
                       <Link href="/profiles" role="menuitem" onClick={() => setProfileMenuOpen(false)} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-[#d7d7da] hover:bg-white/[0.07] hover:text-white"><Pencil size={19} className="text-[#aeb0b5]" />Gérer les profils</Link>
                       <button type="button" role="menuitem" className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-[#d7d7da] hover:bg-white/[0.07] hover:text-white"><Settings size={19} className="text-[#aeb0b5]" />Compte</button>
-                      <button type="button" role="menuitem" className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-[#d7d7da] hover:bg-white/[0.07] hover:text-white"><CircleHelp size={19} className="text-[#aeb0b5]" />Centre d'aide</button>
+                      <button type="button" role="menuitem" className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-[#d7d7da] hover:bg-white/[0.07] hover:text-white"><CircleHelp size={19} className="text-[#aeb0b5]" />Centre d&apos;aide</button>
                     </div>
                     <div className="border-t border-white/[0.08] p-2"><button type="button" role="menuitem" onClick={exitProfile} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-bold text-[#e3e3e5] hover:bg-primary/15"><LogOut size={19} className="text-primary" />Quitter le profil</button></div>
                   </div>

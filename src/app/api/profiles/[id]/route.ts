@@ -8,6 +8,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   if (!process.env.DATABASE_URL) return NextResponse.json({ error: 'DATABASE_URL is not configured' }, { status: 503 });
   const { id } = await params;
   const providerUserId = getProviderUserId(request);
+  if (!providerUserId) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   const profile = await prisma.profile.findFirst({ where: { id, user: { providerUserId } } });
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
   await prisma.profile.delete({ where: { id } });

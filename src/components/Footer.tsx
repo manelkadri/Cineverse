@@ -34,7 +34,7 @@ export default function Footer() {
         </div>
         <div className="border-t border-border pt-6 flex flex-col md:flex-row items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">© 2026 CINEVERSE. Tous droits réservés.</p>
-          <p className="text-xs text-muted-foreground">Propulsé par TMDB — Données fournies à titre de démonstration.</p>
+          <p className="text-xs text-muted-foreground">Données cinéma et télévision fournies par TMDB.</p>
         </div>
       </div>
     </footer>

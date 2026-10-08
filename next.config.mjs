@@ -4,15 +4,10 @@ import { imageHosts } from './image-hosts.config.mjs';
 const nextConfig = {
   productionBrowserSourceMaps: true,
   distDir: process.env.DIST_DIR || '.next',
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   images: {
     remotePatterns: imageHosts,
-    minimumCacheTTL: 60,
+    minimumCacheTTL: 86400,
+    formats: ['image/avif', 'image/webp'],
     qualities: [75, 85, 100],
   },
   webpack(

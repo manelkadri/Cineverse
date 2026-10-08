@@ -4,8 +4,8 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import { DEFAULT_PROFILES } from '@/lib/default-profiles';
 import type { CineverseProfile, ProfileDraft } from '@/lib/profile-types';
 
-const STORAGE_KEY = 'cineverse.profile-state.v3';
-const SELECTED_KEY = 'cineverse.selected-profile.v3';
+const STORAGE_KEY = 'cineverse.profile-state.v4';
+const SELECTED_KEY = 'cineverse.selected-profile.v4';
 
 interface ProfileContextValue {
   profiles: CineverseProfile[];

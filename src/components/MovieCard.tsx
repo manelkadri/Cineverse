@@ -4,6 +4,8 @@ import Link from 'next/link';
 import AppImage from '@/components/ui/AppImage';
 import { Check, Heart, Play, Plus, Star } from 'lucide-react';
 import { useProfiles } from '@/context/ProfileContext';
+import { mediaDetailHref } from '@/lib/media-id';
+import type { MediaType } from '@/lib/profile-types';
 
 interface MovieCardProps {
   id: string;
@@ -11,14 +13,14 @@ interface MovieCardProps {
   posterPath: string;
   year: number;
   rating: number;
-  mediaType?: 'film' | 'serie';
+  mediaType?: MediaType;
   href?: string;
 }
 
 export default function MovieCard({ id, title, posterPath, year, rating, mediaType, href }: MovieCardProps) {
   const [hovered, setHovered] = useState(false);
   const { selectedProfile, toggleWatchlist, toggleFavorite } = useProfiles();
-  const detailHref = href || `/movie-series-detail?id=${id}`;
+  const detailHref = href || mediaDetailHref(id);
   const inList = selectedProfile?.watchlist.includes(id) ?? false;
   const favorite = selectedProfile?.favorites.includes(id) ?? false;
 
@@ -37,11 +39,10 @@ export default function MovieCard({ id, title, posterPath, year, rating, mediaTy
             fill
             sizes="(max-width: 640px) 40vw, (max-width: 1024px) 20vw, 15vw"
             className="object-cover transition-transform duration-500 group-hover:scale-105"
-            unoptimized
           />
 
           {/* Serie badge */}
-          {mediaType === 'serie' && (
+          {mediaType === 'tv' && (
             <span className="badge-serie">Série</span>
           )}
 

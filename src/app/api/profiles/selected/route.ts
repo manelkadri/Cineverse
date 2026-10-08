@@ -8,6 +8,7 @@ export async function PUT(request: Request) {
   if (!process.env.DATABASE_URL) return NextResponse.json({ error: 'DATABASE_URL is not configured' }, { status: 503 });
   const { profileId } = (await request.json()) as { profileId?: string | null };
   const providerUserId = getProviderUserId(request);
+  if (!providerUserId) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   const user = await prisma.user.upsert({ where: { providerUserId }, update: {}, create: { providerUserId } });
   if (profileId) {
     const profile = await prisma.profile.findFirst({ where: { id: profileId, userId: user.id } });

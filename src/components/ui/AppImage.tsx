@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useState, useCallback, useMemo, memo } from 'react';
-import Image from 'next/image';
+import React, { useState, useCallback, useEffect, useMemo, memo } from 'react';
+import Image, { type ImageProps } from 'next/image';
 
-interface AppImageProps {
+interface AppImageProps extends Omit<ImageProps, 'src' | 'alt'> {
     src: string;
     alt: string;
     width?: number;
@@ -19,7 +19,6 @@ interface AppImageProps {
     fallbackSrc?: string;
     loading?: 'lazy' | 'eager';
     unoptimized?: boolean;
-    [key: string]: any;
 }
 
 const AppImage = memo(function AppImage({
@@ -44,8 +43,13 @@ const AppImage = memo(function AppImage({
     const [isLoading, setIsLoading] = useState(true);
     const [hasError, setHasError] = useState(false);
 
-    const isExternalUrl = useMemo(() => typeof imageSrc === 'string' && imageSrc.startsWith('http'), [imageSrc]);
-    const resolvedUnoptimized = unoptimized || isExternalUrl;
+    const resolvedUnoptimized = unoptimized;
+
+    useEffect(() => {
+        setImageSrc(src);
+        setHasError(false);
+        setIsLoading(true);
+    }, [src]);
 
     const handleError = useCallback(() => {
         if (!hasError && imageSrc !== fallbackSrc) {
@@ -62,13 +66,13 @@ const AppImage = memo(function AppImage({
 
     const imageClassName = useMemo(() => {
         const classes = [className];
-        if (isLoading) classes.push('bg-gray-200');
+        if (isLoading) classes.push('bg-card');
         if (onClick) classes.push('cursor-pointer hover:opacity-90 transition-opacity duration-200');
         return classes.filter(Boolean).join(' ');
     }, [className, isLoading, onClick]);
 
     const imageProps = useMemo(() => {
-        const baseProps: any = {
+        const baseProps: Omit<ImageProps, 'width' | 'height' | 'fill'> = {
             src: imageSrc,
             alt,
             className: imageClassName,
@@ -97,6 +101,7 @@ const AppImage = memo(function AppImage({
         return (
             <Image
                 {...imageProps}
+                alt={alt}
                 fill
                 sizes={sizes || '(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw'}
                 style={{ objectFit: 'cover' }}
@@ -108,6 +113,7 @@ const AppImage = memo(function AppImage({
     return (
         <Image
             {...imageProps}
+            alt={alt}
             width={width || 400}
             height={height || 300}
             sizes={sizes}

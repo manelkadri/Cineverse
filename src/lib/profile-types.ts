@@ -1,4 +1,4 @@
-export type MediaType = 'film' | 'serie';
+export type MediaType = 'movie' | 'tv';
 
 export interface ViewingProgress {
   mediaId: string;
@@ -40,4 +40,5 @@ export interface ContentItem {
   genres: string[];
   maturityLevel: number;
   durationSeconds: number;
+  overview?: string;
 }

@@ -1,6 +1,6 @@
 import type { Prisma } from '@prisma/client';
-import { CONTENT_CATALOG } from './content';
 import type { CineverseProfile } from './profile-types';
+import { parseMediaId } from './media-id';
 
 export const profileInclude = {
   watchlist: { orderBy: { addedAt: 'asc' as const } },
@@ -30,9 +30,10 @@ export function toClientProfile(profile: DatabaseProfile): CineverseProfile {
 }
 
 export function mediaTypeFor(mediaId: string) {
-  return CONTENT_CATALOG.find((item) => item.id === mediaId)?.mediaType ?? 'film';
+  return parseMediaId(mediaId)?.mediaType ?? 'movie';
 }
 
 export function getProviderUserId(request: Request) {
-  return request.headers.get('x-cineverse-user-id') || 'demo-user';
+  const value = request.headers.get('x-cineverse-user-id')?.trim();
+  return value || null;
 }

@@ -1,223 +1,55 @@
 'use client';
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { Check, ChevronLeft, ChevronRight, Plus, RefreshCw } from 'lucide-react';
 import AppImage from '@/components/ui/AppImage';
-import { Check, Play, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useProfiles } from '@/context/ProfileContext';
+import { mediaDetailHref } from '@/lib/media-id';
+import type { ContentItem } from '@/lib/profile-types';
 
-const HERO_ITEMS = [
-{
-  id: 'the-last-of-us',
-  maturityLevel: 16,
-  title: 'THE LAST OF US',
-  type: 'SÉRIE',
-  network: 'HBO',
-  year: '2023',
-  seasons: '2 saisons',
-  genres: ['Drame', 'Science-fiction'],
-  rating: '16+',
-  synopsis: "Dans un monde post-apocalyptique, un survivant endurci est chargé d'escorter une adolescente qui pourrait sauver l'humanité.",
-  backdropPath: '/assets/images/heroes/the-last-of-us-v2.png',
-  posterPath: '/assets/images/heroes/the-last-of-us-v2.png',
-  href: '/movie-series-detail?id=the-last-of-us'
-},
-{
-  id: 'dune-part-two',
-  maturityLevel: 13,
-  title: 'DUNE: PART TWO',
-  type: 'FILM',
-  network: null,
-  year: '2024',
-  seasons: '2h 46min',
-  genres: ['Science-fiction', 'Aventure'],
-  rating: '13+',
-  synopsis: "Paul Atreides s\'unit aux Fremen et entame un voyage spirituel et militaire pour se venger des conspirateurs qui ont détruit sa famille.",
-  backdropPath: '/assets/images/heroes/dune-part-two-v2.png',
-  posterPath: '/assets/images/heroes/dune-part-two-v2.png',
-  href: '/movie-series-detail?id=dune-part-two'
-},
-{
-  id: 'oppenheimer',
-  maturityLevel: 13,
-  title: 'OPPENHEIMER',
-  type: 'FILM',
-  network: null,
-  year: '2023',
-  seasons: '3h 00min',
-  genres: ['Biographie', 'Drame', 'Histoire'],
-  rating: '13+',
-  synopsis: "L\'histoire du physicien J. Robert Oppenheimer et de son rôle dans le développement de la bombe atomique pendant la Seconde Guerre mondiale.",
-  backdropPath: '/assets/images/heroes/oppenheimer-v2.png',
-  posterPath: '/assets/images/heroes/oppenheimer-v2.png',
-  href: '/movie-series-detail?id=oppenheimer'
-},
-{
-  id: 'breaking-bad',
-  maturityLevel: 18,
-  title: 'BREAKING BAD',
-  type: 'SÉRIE',
-  network: 'AMC',
-  year: '2008',
-  seasons: '5 saisons',
-  genres: ['Crime', 'Thriller', 'Drame'],
-  rating: '18+',
-  synopsis: "Un professeur de chimie atteint d\'un cancer terminal se tourne vers la fabrication de méthamphétamine pour assurer l\'avenir de sa famille.",
-  backdropPath: '/assets/images/heroes/breaking-bad-v2.png',
-  posterPath: '/assets/images/heroes/breaking-bad-v2.png',
-  href: '/movie-series-detail?id=breaking-bad'
-}];
-
-const KIDS_HERO = {
-  id: 'inside-out-2', maturityLevel: 7, title: 'VICE-VERSA 2', type: 'FILM', network: null,
-  year: '2024', seasons: '1h 36min', genres: ['Animation', 'Famille'], rating: '7+',
-  synopsis: "Les émotions de Riley accueillent de nouveaux visiteurs alors qu'elle entre dans l'adolescence.",
-  backdropPath: 'https://image.tmdb.org/t/p/original/p5ozvmdgsmbWe0H8Xk7Rc8SCwAB.jpg',
-  posterPath: 'https://image.tmdb.org/t/p/w500/vpnVM9B6NMmQpWeZvzLvDESb2QY.jpg',
-  href: '/movie-series-detail?id=inside-out-2',
-};
-
-
-export default function HeroCarousel() {
+export default function HeroCarousel({ items, error = false }: { items: ContentItem[]; error?: boolean }) {
   const { selectedProfile, toggleWatchlist } = useProfiles();
+  const visibleItems = useMemo(() => items.filter((item) => !selectedProfile || item.maturityLevel <= selectedProfile.maturityLevel), [items, selectedProfile]);
   const [current, setCurrent] = useState(0);
   const [transitioning, setTransitioning] = useState(false);
-  const visibleItems = useMemo(() => {
-    if (!selectedProfile) return HERO_ITEMS;
-    const filtered = HERO_ITEMS.filter((item) => item.maturityLevel <= selectedProfile.maturityLevel);
-    return filtered.length ? filtered : [KIDS_HERO];
-  }, [selectedProfile]);
 
+  useEffect(() => setCurrent(0), [selectedProfile?.id, visibleItems.length]);
   const goTo = useCallback((index: number) => {
-    if (transitioning) return;
+    if (transitioning || !visibleItems.length) return;
     setTransitioning(true);
-    setTimeout(() => {
-      setCurrent(index);
-      setTransitioning(false);
-    }, 300);
-  }, [transitioning]);
+    window.setTimeout(() => { setCurrent(index); setTransitioning(false); }, 250);
+  }, [transitioning, visibleItems.length]);
+  const next = useCallback(() => goTo((current + 1) % Math.max(visibleItems.length, 1)), [current, goTo, visibleItems.length]);
+  useEffect(() => { if (visibleItems.length < 2) return; const timer = window.setInterval(next, 7000); return () => window.clearInterval(timer); }, [next, visibleItems.length]);
 
-  const prev = () => goTo((current - 1 + visibleItems.length) % visibleItems.length);
-  const next = useCallback(() => goTo((current + 1) % visibleItems.length), [current, goTo, visibleItems.length]);
+  const item = visibleItems[current];
+  if (!item) {
+    return (
+      <section className="relative grid h-[62vh] min-h-[500px] place-items-center overflow-hidden bg-gradient-to-br from-[#0c0e12] via-[#08090b] to-black px-6 text-center">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_30%,rgba(229,9,20,0.12),transparent_38%)]" />
+        <div className="relative max-w-md"><RefreshCw className="mx-auto text-primary" size={30} /><h1 className="mt-5 text-2xl font-extrabold">Catalogue momentanément indisponible</h1><p className="mt-2 text-sm text-muted-foreground">{error ? 'CINEVERSE ne peut pas joindre TMDB pour le moment.' : 'Aucun contenu adapté à ce profil.'}</p><Link href="/films-series-catalog" className="mt-6 inline-flex rounded-lg border border-white/15 px-4 py-2 text-sm font-bold hover:bg-white/10">Ouvrir le catalogue</Link></div>
+      </section>
+    );
+  }
 
-  useEffect(() => setCurrent(0), [selectedProfile?.id]);
-
-  useEffect(() => {
-    const timer = setInterval(next, 7000);
-    return () => clearInterval(timer);
-  }, [next]);
-
-  const item = visibleItems[current] ?? visibleItems[0];
   const inList = selectedProfile?.watchlist.includes(item.id) ?? false;
-
   return (
-    <div className="relative w-full h-[85vh] min-h-[560px] max-h-[900px] overflow-hidden">
-      {/* Backdrop */}
-      <div
-        className={`absolute inset-0 transition-opacity duration-700 ${transitioning ? 'opacity-0' : 'opacity-100'}`}>
-        
-        <AppImage
-          src={item.backdropPath}
-          alt={`Scène du film ${item.title}`}
-          fill
-          priority
-          sizes="100vw"
-          className="object-cover object-center" />
-        
-      </div>
-
-      {/* Gradients */}
-      <div className="absolute inset-0 hero-gradient" />
-      <div className="absolute bottom-0 left-0 right-0 h-48 hero-gradient-bottom" />
-      <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-black/30" />
-
-      {/* Content */}
-      <div
-        className={`absolute inset-0 flex items-center transition-all duration-500 ${
-        transitioning ? 'opacity-0 translate-y-2' : 'opacity-100 translate-y-0'}`
-        }>
-        
-        <div className="max-w-screen-2xl mx-auto px-4 lg:px-8 xl:px-10 w-full pt-16">
+    <section className="relative h-[85vh] min-h-[560px] max-h-[900px] w-full overflow-hidden">
+      <div className={`absolute inset-0 transition-opacity duration-700 ${transitioning ? 'opacity-0' : 'opacity-100'}`}><AppImage src={item.backdropPath} alt={`Scène de ${item.title}`} fill priority sizes="100vw" className="object-cover object-center" /></div>
+      <div className="absolute inset-0 hero-gradient" /><div className="absolute inset-x-0 bottom-0 h-48 hero-gradient-bottom" /><div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-black/30" />
+      <div className={`absolute inset-0 flex items-center transition-all duration-500 ${transitioning ? 'translate-y-2 opacity-0' : 'translate-y-0 opacity-100'}`}>
+        <div className="mx-auto w-full max-w-screen-2xl px-4 pt-16 lg:px-8 xl:px-10">
           <div className="max-w-xl">
-            {/* Badge */}
-            <div className="flex items-center gap-2 mb-3">
-              {item.network &&
-              <span className="text-xs font-bold text-primary border border-primary px-2 py-0.5 rounded">
-                  {item.network}
-                </span>
-              }
-              <span className="text-xs font-semibold text-white/70 uppercase tracking-widest">
-                {item.type}
-              </span>
-            </div>
-
-            {/* Title */}
-            <h1 className="text-hero-title text-white mb-4 drop-shadow-2xl">
-              {item.title}
-            </h1>
-
-            {/* Metadata */}
-            <div className="flex flex-wrap items-center gap-2 mb-4">
-              <span className="text-sm text-white/70">{item.year}</span>
-              <span className="text-white/30">•</span>
-              <span className="text-sm text-white/70">{item.seasons}</span>
-              {item.genres.map((g) =>
-              <span key={`hero-genre-${g}`} className="text-sm text-white/70">{g}</span>
-              )}
-              <span className="text-xs font-bold border border-white/40 text-white/70 px-1.5 py-0.5 rounded">
-                {item.rating}
-              </span>
-            </div>
-
-            {/* Synopsis */}
-            <p className="text-sm text-white/75 leading-relaxed mb-6 line-clamp-3 max-w-md">
-              {item.synopsis}
-            </p>
-
-            {/* Buttons */}
-            <div className="flex flex-wrap items-center gap-3">
-              <Link href={item.href} className="btn-primary text-sm">
-                <Play size={16} fill="white" />
-                Regarder
-              </Link>
-              <button className="btn-secondary text-sm" onClick={() => toggleWatchlist(item.id)}>
-                {inList ? <Check size={16} /> : <Plus size={16} />}
-                {inList ? 'Dans ma liste' : 'Ma liste'}
-              </button>
-            </div>
+            <div className="mb-3 flex items-center gap-2"><span className="rounded border border-primary px-2 py-0.5 text-xs font-bold text-primary">TMDB</span><span className="text-xs font-semibold uppercase tracking-widest text-white/70">{item.mediaType === 'movie' ? 'Film' : 'Série'}</span></div>
+            <h1 className="text-hero-title mb-4 text-white drop-shadow-2xl">{item.title}</h1>
+            <div className="mb-4 flex flex-wrap items-center gap-2"><span className="text-sm text-white/70">{item.year || 'Date inconnue'}</span><span className="text-white/30">•</span>{item.genres.slice(0, 3).map((genre) => <span key={genre} className="text-sm text-white/70">{genre}</span>)}<span className="rounded border border-white/40 px-1.5 py-0.5 text-xs font-bold text-white/70">{item.rating.toFixed(1)}</span></div>
+            <p className="mb-6 line-clamp-3 max-w-md text-sm leading-relaxed text-white/75">{item.overview || 'Aucune description française disponible.'}</p>
+            <div className="flex flex-wrap items-center gap-3"><Link href={mediaDetailHref(item.id)} className="btn-primary text-sm">Plus d&apos;informations</Link><button type="button" onClick={() => toggleWatchlist(item.id)} className="btn-secondary text-sm">{inList ? <Check size={16} /> : <Plus size={16} />}{inList ? 'Dans ma liste' : 'Ma liste'}</button></div>
           </div>
         </div>
       </div>
-
-      {/* Nav arrows */}
-      <button
-        onClick={prev}
-        className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/40 border border-white/20 flex items-center justify-center hover:bg-black/70 hover:border-white/40 transition-all duration-200"
-        aria-label="Précédent">
-        
-        <ChevronLeft size={20} className="text-white" />
-      </button>
-      <button
-        onClick={next}
-        className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-black/40 border border-white/20 flex items-center justify-center hover:bg-black/70 hover:border-white/40 transition-all duration-200"
-        aria-label="Suivant">
-        
-        <ChevronRight size={20} className="text-white" />
-      </button>
-
-      {/* Dots */}
-      <div className="absolute bottom-20 left-1/2 -translate-x-1/2 flex items-center gap-2 z-20">
-        {visibleItems.map((_, i) =>
-        <button
-          key={`hero-dot-${i}`}
-          onClick={() => goTo(i)}
-          className={`rounded-full transition-all duration-300 ${
-          i === current ?
-          'w-6 h-2 bg-primary' : 'w-2 h-2 bg-white/30 hover:bg-white/60'}`
-          }
-          aria-label={`Aller au slide ${i + 1}`} />
-
-        )}
-      </div>
-    </div>);
-
+      {visibleItems.length > 1 && <><button type="button" onClick={() => goTo((current - 1 + visibleItems.length) % visibleItems.length)} className="absolute left-3 top-1/2 z-20 grid size-10 -translate-y-1/2 place-items-center rounded-full border border-white/20 bg-black/40 hover:bg-black/70" aria-label="Précédent"><ChevronLeft size={20} /></button><button type="button" onClick={next} className="absolute right-3 top-1/2 z-20 grid size-10 -translate-y-1/2 place-items-center rounded-full border border-white/20 bg-black/40 hover:bg-black/70" aria-label="Suivant"><ChevronRight size={20} /></button><div className="absolute bottom-20 left-1/2 z-20 flex -translate-x-1/2 gap-2">{visibleItems.map((media, index) => <button key={media.id} onClick={() => goTo(index)} className={`h-2 rounded-full transition-all ${index === current ? 'w-6 bg-primary' : 'w-2 bg-white/30'}`} aria-label={`Afficher ${media.title}`} />)}</div></>}
+    </section>
+  );
 }

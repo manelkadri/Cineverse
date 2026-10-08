@@ -12,6 +12,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'DATABASE_URL is not configured', databaseConfigured: false }, { status: 503 });
   }
   const providerUserId = getProviderUserId(request);
+  if (!providerUserId) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   const user = await prisma.user.upsert({
     where: { providerUserId },
     update: {},
@@ -33,6 +34,7 @@ export async function POST(request: Request) {
   if (!input.id || !input.name?.trim()) return NextResponse.json({ error: 'Invalid profile' }, { status: 400 });
 
   const providerUserId = getProviderUserId(request);
+  if (!providerUserId) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   const user = await prisma.user.upsert({ where: { providerUserId }, update: {}, create: { providerUserId } });
   const existing = await prisma.profile.findUnique({ where: { id: input.id } });
   if (existing && existing.userId !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

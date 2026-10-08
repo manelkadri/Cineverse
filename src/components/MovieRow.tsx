@@ -3,6 +3,7 @@ import React, { useRef, useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import MovieCard from './MovieCard';
+import type { MediaType } from '@/lib/profile-types';
 
 interface Movie {
   id: string;
@@ -10,7 +11,7 @@ interface Movie {
   posterPath: string;
   year: number;
   rating: number;
-  mediaType?: 'film' | 'serie';
+  mediaType?: MediaType;
 }
 
 interface MovieRowProps {
@@ -37,6 +38,8 @@ export default function MovieRow({ title, movies, seeAllHref = '/films-series-ca
     setCanScrollLeft(el.scrollLeft > 0);
     setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 4);
   };
+
+  if (!movies.length) return null;
 
   return (
     <section className="mb-8">

@@ -42,8 +42,8 @@
     "dev": "next dev -p 4028",
     "build": "next build",
     "start": "next dev -p 4028",
-    "lint": "next lint",
-    "lint:fix": "next lint --fix",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx,css,md,json}\"",
     "serve": "next start",
     "type-check": "tsc --noEmit"
@@ -56,7 +56,7 @@
     "@tailwindcss/typography": "^0.5.16",
     "framer-motion": "^11.0.0",
     "lucide-react": "^1.7.0",
-    "next": "15.5.18",
+    "next": "15.5.27",
     "react": "19.0.3",
     "react-dom": "19.0.3",
     "recharts": "^2.15.2"
@@ -71,7 +71,7 @@
     "@typescript-eslint/parser": "^8.29.0",
     "autoprefixer": "10.4.2",
     "eslint": "^9",
-    "eslint-config-next": "^15.2.4",
+    "eslint-config-next": "15.5.27",
     "eslint-config-prettier": "^10.1.1",
     "eslint-plugin-prettier": "^5.2.6",
     "postcss": "8.4.8",
