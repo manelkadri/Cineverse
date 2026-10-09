@@ -74,6 +74,8 @@ model Profile {
   preferences       String[]          @default([])
   language          String            @default("fr-FR")
   parentalPinHash   String?
+  // 4-digit profile lock (HMAC pepper + bcrypt); null for profiles created before PIN protection, which must set one before use
+  profilePinHash    String?
   watchlist         WatchlistItem[]
   favorites         FavoriteItem[]
   viewingHistory    ViewingActivity[]
