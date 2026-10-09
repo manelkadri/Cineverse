@@ -9,22 +9,34 @@ datasource db {
 }
 
 model User {
-  id                String          @id @default(cuid())
-  providerUserId    String?         @unique
-  email             String?         @unique
-  emailVerified     DateTime?
-  name              String?
-  image             String?
-  passwordHash      String?
-  selectedProfileId String?
-  accounts          Account[]
-  sessions          Session[]
-  profiles          Profile[]
+  id                     String                  @id @default(cuid())
+  providerUserId         String?                 @unique
+  email                  String?                 @unique
+  emailVerified          DateTime?
+  name                   String?
+  image                  String?
+  passwordHash           String?
+  selectedProfileId      String?
+  accounts               Account[]
+  sessions               Session[]
+  profiles               Profile[]
   // Support staff flag. Never settable through the app: it is granted by the site owner with scripts/grant-support-admin.mjs.
-  isSupportAdmin    Boolean         @default(false)
-  supportTickets    SupportTicket[]
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
+  isSupportAdmin         Boolean                 @default(false)
+  supportTickets         SupportTicket[]         @relation("TicketAuthor")
+  assignedTickets        SupportTicket[]         @relation("TicketAssignee")
+  supportMessages        SupportMessage[]        @relation("MessageAuthor")
+  auditEntries           SupportAuditLog[]       @relation("AuditActor")
+  kbArticlesEdited       KbArticle[]             @relation("KbArticleEditor")
+  kbFaqsEdited           KbFaq[]                 @relation("KbFaqEditor")
+  settingsEdited         SupportSetting[]        @relation("SettingEditor")
+  supportAdminPreference SupportAdminPreference?
+  // Notification preferences for the two NON-essential categories. Security and support-ticket notifications are always delivered.
+  notifyCatalogue        Boolean                 @default(true)
+  notifyService          Boolean                 @default(true)
+  notifications          Notification[]
+  announcements          Announcement[]
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
 
   @@index([selectedProfileId])
 }
@@ -188,23 +200,182 @@ model AuthAttempt {
 // free text), so it is deleted with the account it is linked to and can only be read by support administrators.
 // ipHash and messageHash are keyed HMACs used only for spam limits and duplicate detection, never the raw values.
 model SupportTicket {
-  id          String   @id @default(cuid())
-  userId      String?
-  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  email       String
-  subject     String
-  category    String
-  message     String   @db.Text
-  status      String   @default("open")
-  adminNote   String?  @db.Text
-  ipHash      String
-  messageHash String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String           @id @default(cuid())
+  userId          String?
+  user            User?            @relation("TicketAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  email           String
+  subject         String
+  category        String
+  message         String           @db.Text
+  status          String           @default("open")
+  adminNote       String?          @db.Text
+  ipHash          String
+  messageHash     String
+  // 0 low, 1 normal (the default for every existing ticket), 2 high, 3 urgent
+  priority        Int              @default(1)
+  assignedToId    String?
+  assignedTo      User?            @relation("TicketAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  // true until staff handle the ticket (reply or status change); set again by a new message from its author
+  awaitingStaff   Boolean          @default(true)
+  // set when staff publish the first reply; stays empty for every ticket answered before this field existed
+  firstResponseAt DateTime?
+  messages        SupportMessage[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
+  @@index([assignedToId])
+  @@index([priority, createdAt])
   @@index([status, createdAt])
   @@index([userId])
   @@index([ipHash, createdAt])
   @@index([email, createdAt])
   @@index([createdAt])
+}
+
+// An in-app notification for ONE account. Events (password change, PIN change, ticket status...) and administrator
+// announcements create them; the bell in the navbar reads them. dedupeKey identifies the event, so the same event can
+// never notify the same account twice. href is a validated internal path, never an external address.
+model Notification {
+  id             String        @id @default(cuid())
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category       String
+  type           String
+  title          String
+  message        String
+  href           String?
+  dedupeKey      String
+  announcementId String?
+  announcement   Announcement? @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  readAt         DateTime?
+  createdAt      DateTime      @default(now())
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
+  @@index([announcementId])
+}
+
+// A message an administrator sent to every account that accepts that category. Deleting it withdraws its notifications.
+model Announcement {
+  id             String         @id @default(cuid())
+  createdById    String?
+  createdBy      User?          @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  category       String
+  title          String
+  message        String
+  href           String?
+  recipientCount Int            @default(0)
+  createdAt      DateTime       @default(now())
+  notifications  Notification[]
+
+  @@index([createdAt])
+  @@index([createdById, createdAt])
+}
+
+// One message of a ticket's conversation. The very first message stays in SupportTicket.message and the old internal
+// note stays in SupportTicket.adminNote, so existing tickets are untouched; everything after that is a row here.
+// visibility "internal" is a private staff note: it is never returned to the ticket's author.
+model SupportMessage {
+  id         String        @id @default(cuid())
+  ticketId   String
+  ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  senderType String
+  authorId   String?
+  author     User?         @relation("MessageAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  body       String        @db.Text
+  visibility String        @default("public")
+  bodyHash   String
+  createdAt  DateTime      @default(now())
+
+  @@index([ticketId, createdAt])
+  @@index([authorId])
+}
+
+// Append-only record of sensitive support actions. A database trigger (see the migration) refuses updates and deletes,
+// except for clearing actorId when the actor's account is deleted. metadata is small and never holds secrets or message text.
+model SupportAuditLog {
+  id           String   @id @default(cuid())
+  actorId      String?
+  actor        User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  action       String
+  resourceType String
+  resourceId   String
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([resourceType, resourceId, createdAt])
+  @@index([actorId, createdAt])
+}
+
+// Knowledge base edits. The built-in Help Center content (34 articles, FAQ) stays in code; a row here is either a new
+// article or an override of a built-in one with the same slug. Public pages show published content only.
+model KbArticle {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  title       String
+  category    String
+  summary     String
+  body        Json
+  links       Json      @default("[]")
+  keywords    String[]  @default([])
+  status      String    @default("draft")
+  publishedAt DateTime?
+  updatedById String?
+  updatedBy   User?     @relation("KbArticleEditor", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status])
+}
+
+model KbFaq {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  question    String
+  answer      String
+  category    String
+  articleSlug String?
+  links       Json     @default("[]")
+  keywords    String[] @default([])
+  status      String   @default("draft")
+  updatedById String?
+  updatedBy   User?    @relation("KbFaqEditor", fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status])
+}
+
+// Contact-form categories: the built-in ones live in code; a row renames, disables or reorders one, or adds a new one.
+model SupportCategory {
+  id        String   @id
+  label     String
+  enabled   Boolean  @default(true)
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Explicitly configured support settings (for example the availability text shown in the Help Center). Nothing is
+// shown to visitors unless a value was saved here.
+model SupportSetting {
+  key         String   @id
+  value       Json
+  updatedById String?
+  updatedBy   User?    @relation("SettingEditor", fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedAt   DateTime @updatedAt
+}
+
+// Which support events notify this administrator (all on until changed).
+model SupportAdminPreference {
+  userId             String   @id
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notifyNewTicket    Boolean  @default(true)
+  notifyUserReply    Boolean  @default(true)
+  notifyHighPriority Boolean  @default(true)
+  notifyAssigned     Boolean  @default(true)
+  notifyReopened     Boolean  @default(true)
+  updatedAt          DateTime @updatedAt
 }

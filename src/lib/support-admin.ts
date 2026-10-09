@@ -4,7 +4,13 @@ import { prisma } from './prisma';
 import { authenticatedContext } from './server-auth';
 import { crossSiteResponse } from './account-api';
 import { isAuthRuntimeConfigured } from './auth-security';
-import { adminStatus } from './support-rules';
+import { adminStatus, ticketReference } from './support-rules';
+import { createRateLimiter } from './notification-rules';
+
+export { ticketReference };
+
+// A brake on changes made by one administrator (per server instance): 90 per minute is far above real use.
+const mutationLimiter = createRateLimiter(Number(process.env.SUPPORT_ADMIN_MUTATIONS_PER_MINUTE) || 90, 60_000);
 
 /**
  * Whether this account is support staff, read from the database on every call (never from the session token or the
@@ -39,7 +45,10 @@ export async function requireSupportAdmin(request: Request, { mutation = false }
   const status = await supportAdminStatus(context.userId);
   if (status === 'unavailable') return { response: NextResponse.json({ error: 'Impossible de vérifier vos droits pour le moment.', code: 'ADMIN_CHECK_FAILED' }, { status: 503 }) };
   if (status !== 'admin') return { response: NextResponse.json({ error: 'Not found' }, { status: 404 }) };
+  if (mutation) {
+    const verdict = mutationLimiter(context.userId);
+    if (!verdict.allowed) return { response: NextResponse.json({ error: 'Trop d’actions en peu de temps. Réessayez dans un instant.', code: 'RATE_LIMITED' }, { status: 429, headers: { 'Retry-After': String(verdict.retryAfterSeconds) } }) };
+  }
   return { context };
 }
 
-export const ticketReference = (id: string) => `CV-${id.slice(-8).toUpperCase()}`;

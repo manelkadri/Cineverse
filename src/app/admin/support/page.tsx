@@ -1,12 +1,9 @@
 import type { Metadata } from 'next';
-import AdminSupport from '@/components/admin/AdminSupport';
+import AdminOverview from '@/components/admin/AdminOverview';
 
-export const metadata: Metadata = {
-  title: 'Demandes d’aide — Administration CINEVERSE',
-  robots: { index: false, follow: false },
-};
+export const metadata: Metadata = { title: 'Vue d’ensemble — Support CINEVERSE', robots: { index: false, follow: false } };
 
-// Login is required by the middleware; the staff check is made again by every /api/admin/support request.
-export default function AdminSupportPage() {
-  return <AdminSupport />;
+// The administrator check is made by app/admin/layout.tsx on the server; every number comes from /api/admin/support/overview.
+export default function SupportOverviewPage() {
+  return <AdminOverview />;
 }
