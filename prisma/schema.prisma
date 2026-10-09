@@ -9,9 +9,9 @@ datasource db {
 }
 
 model User {
-  id                String    @id @default(cuid())
-  providerUserId    String?   @unique
-  email             String?   @unique
+  id                String          @id @default(cuid())
+  providerUserId    String?         @unique
+  email             String?         @unique
   emailVerified     DateTime?
   name              String?
   image             String?
@@ -20,8 +20,11 @@ model User {
   accounts          Account[]
   sessions          Session[]
   profiles          Profile[]
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  // Support staff flag. Never settable through the app: it is granted by the site owner with scripts/grant-support-admin.mjs.
+  isSupportAdmin    Boolean         @default(false)
+  supportTickets    SupportTicket[]
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
 
   @@index([selectedProfileId])
 }
@@ -81,8 +84,8 @@ model Profile {
   viewingHistory    ViewingActivity[]
   watchProgress     WatchProgress[]
   preferenceDetails UserPreferences?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
   @@index([userId])
   @@index([userId, isKids])
@@ -178,5 +181,30 @@ model AuthAttempt {
   createdAt      DateTime @default(now())
 
   @@index([identifierHash, createdAt])
+  @@index([createdAt])
+}
+
+// A help request sent from the Help Center by a visitor or a signed-in member. Contains personal data (contact e-mail and
+// free text), so it is deleted with the account it is linked to and can only be read by support administrators.
+// ipHash and messageHash are keyed HMACs used only for spam limits and duplicate detection, never the raw values.
+model SupportTicket {
+  id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email       String
+  subject     String
+  category    String
+  message     String   @db.Text
+  status      String   @default("open")
+  adminNote   String?  @db.Text
+  ipHash      String
+  messageHash String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([userId])
+  @@index([ipHash, createdAt])
+  @@index([email, createdAt])
   @@index([createdAt])
 }
