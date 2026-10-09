@@ -3,36 +3,87 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
   id                String    @id @default(cuid())
-  providerUserId    String    @unique
+  providerUserId    String?   @unique
+  email             String?   @unique
+  emailVerified     DateTime?
+  name              String?
+  image             String?
+  passwordHash      String?
   selectedProfileId String?
+  accounts          Account[]
+  sessions          Session[]
   profiles          Profile[]
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+
+  @@index([selectedProfileId])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
 }
 
 model Profile {
-  id               String            @id
-  userId           String
-  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name             String
-  avatar           String
-  isKids           Boolean           @default(false)
-  maturityLevel    Int               @default(18)
-  preferences      String[]          @default([])
-  parentalPinHash  String?
-  watchlist        WatchlistItem[]
-  favorites        FavoriteItem[]
-  viewingHistory   ViewingActivity[]
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  id                String            @id @default(cuid())
+  userId            String
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name              String
+  avatar            String
+  isKids            Boolean           @default(false)
+  maturityLevel     Int               @default(18)
+  preferences       String[]          @default([])
+  language          String            @default("fr-FR")
+  parentalPinHash   String?
+  watchlist         WatchlistItem[]
+  favorites         FavoriteItem[]
+  viewingHistory    ViewingActivity[]
+  watchProgress     WatchProgress[]
+  preferenceDetails UserPreferences?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 
   @@index([userId])
+  @@index([userId, isKids])
 }
 
 model WatchlistItem {
@@ -40,11 +91,13 @@ model WatchlistItem {
   profileId String
   profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
   mediaId   String
+  tmdbId    Int?
   mediaType String
   addedAt   DateTime @default(now())
 
   @@unique([profileId, mediaId])
   @@index([profileId, addedAt])
+  @@index([tmdbId, mediaType])
 }
 
 model FavoriteItem {
@@ -52,11 +105,13 @@ model FavoriteItem {
   profileId String
   profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
   mediaId   String
+  tmdbId    Int?
   mediaType String
   addedAt   DateTime @default(now())
 
   @@unique([profileId, mediaId])
   @@index([profileId, addedAt])
+  @@index([tmdbId, mediaType])
 }
 
 model ViewingActivity {
@@ -64,12 +119,62 @@ model ViewingActivity {
   profileId       String
   profile         Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
   mediaId         String
+  tmdbId          Int?
   mediaType       String
+  seasonNumber    Int?
+  episodeNumber   Int?
   positionSeconds Int      @default(0)
-  durationSeconds Int
+  durationSeconds Int      @default(0)
   completed       Boolean  @default(false)
   lastWatchedAt   DateTime @default(now())
 
   @@unique([profileId, mediaId])
   @@index([profileId, lastWatchedAt])
+  @@index([tmdbId, mediaType])
+}
+
+model WatchProgress {
+  id              String   @id @default(cuid())
+  profileId       String
+  profile         Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  progressKey     String
+  mediaId         String
+  tmdbId          Int
+  mediaType       String
+  seasonNumber    Int?
+  episodeNumber   Int?
+  positionSeconds Int      @default(0)
+  durationSeconds Int
+  completed       Boolean  @default(false)
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
+
+  @@unique([profileId, progressKey])
+  @@index([profileId, updatedAt])
+  @@index([tmdbId, mediaType])
+}
+
+model UserPreferences {
+  id                      String   @id @default(cuid())
+  profileId               String   @unique
+  profile                 Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  preferredGenres         String[] @default([])
+  preferredLanguage       String   @default("fr-FR")
+  subtitlesEnabled        Boolean  @default(true)
+  subtitleLanguage        String   @default("fr")
+  includeMovies           Boolean  @default(true)
+  includeSeries           Boolean  @default(true)
+  excludePreviouslyViewed Boolean  @default(true)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+model AuthAttempt {
+  id             String   @id @default(cuid())
+  identifierHash String
+  success        Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  @@index([identifierHash, createdAt])
+  @@index([createdAt])
 }
