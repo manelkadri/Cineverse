@@ -25,7 +25,9 @@ describe('support request validation', () => {
     };
     assert.match(problem({ subject: 'ab' }) ?? '', /sujet/i);
     assert.match(problem({ subject: 'x'.repeat(SUPPORT_LIMITS.subjectMax + 1) }) ?? '', /sujet/i);
-    assert.match(problem({ category: 'billing' }) ?? '', /catégorie/i);
+    // categories are managed by the support team: the schema checks the format, the route checks the live list (support.integration.test.ts)
+    assert.match(problem({ category: 'Bad Category!' }) ?? '', /catégorie/i);
+    assert.equal(problem({ category: 'billing' }), null);
     assert.match(problem({ email: 'not-an-email' }) ?? '', /e-mail/i);
     assert.match(problem({ email: '' }) ?? '', /e-mail/i);
     assert.match(problem({ message: 'trop court' }) ?? '', /message/i);

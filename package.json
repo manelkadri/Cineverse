@@ -50,13 +50,16 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,css,md,json}\"",
     "serve": "next start",
     "type-check": "tsc --noEmit",
-    "test": "tsx --test tests/validation.test.ts tests/policies.test.ts tests/tmdb-image.test.ts tests/cinematic-progress.test.ts tests/profile-pin.test.ts tests/account.test.ts tests/help.test.ts tests/support.test.ts",
+    "test": "tsx --test tests/validation.test.ts tests/policies.test.ts tests/tmdb-image.test.ts tests/cinematic-progress.test.ts tests/profile-pin.test.ts tests/account.test.ts tests/help.test.ts tests/support.test.ts tests/notifications.test.ts tests/support-admin.test.ts",
     "test:e2e": "tsx --test tests/e2e.integration.test.ts",
     "postinstall": "prisma generate",
     "test:security": "tsx --test tests/security.integration.test.ts",
     "test:pin": "tsx --test tests/pin.integration.test.ts",
     "test:account": "tsx --test tests/account.integration.test.ts",
-    "test:support": "tsx --test tests/support.integration.test.ts"
+    "test:support": "tsx --test tests/support.integration.test.ts",
+    "test:notifications": "tsx --test tests/notifications.integration.test.ts",
+    "test:support-admin": "tsx --test tests/support-admin.integration.test.ts",
+    "test:session": "tsx --test tests/session-state.integration.test.ts"
   },
   "dependencies": {
     "@dhiwise/component-tagger": "^1.0.16",

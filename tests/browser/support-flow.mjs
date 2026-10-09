@@ -188,29 +188,26 @@ check('a signed-in member: the form suggests the account e-mail, and the footer 
   await context.close();
 });
 
-check('the admin page tells a refusal ("Page introuvable") apart from a failed rights check ("Vérification impossible")', async () => {
+check('an ordinary member gets the plain "Page Not Found" page for /admin, with no administration shell and no admin data', async () => {
   const { context, page } = await register(browser);
-  await page.route('**/api/admin/support/tickets**', (route) => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Impossible de vérifier vos droits pour le moment.', code: 'ADMIN_CHECK_FAILED' }) }));
   await page.goto(`${BASE}/admin/support`);
-  await page.getByTestId('admin-unverified').waitFor({ timeout: 20000 });
-  await page.getByText(/erreur du serveur, pas d’un refus/).waitFor();
-  assert.equal(await page.getByTestId('admin-denied').count(), 0, 'not shown as a refusal');
-  assert.equal(await page.getByTestId('admin-tickets').count(), 0, 'and access stays closed');
-  await page.unroute('**/api/admin/support/tickets**');
-  await page.getByRole('button', { name: 'Réessayer' }).click();
-  await page.getByTestId('admin-denied').waitFor({ timeout: 15000 }); // the real server: an ordinary member is refused
+  await page.getByRole('heading', { name: 'Page Not Found' }).waitFor({ timeout: 20000 });
+  assert.equal(await page.getByTestId('back-to-site').count(), 0, 'no administration sidebar');
+  for (const path of ['/admin/support/tickets', '/admin/support/knowledge-base', '/admin/support/analytics', '/admin/support/settings', '/admin/support/audit', '/admin/support/notifications']) {
+    await page.goto(`${BASE}${path}`);
+    await page.getByRole('heading', { name: 'Page Not Found' }).waitFor({ timeout: 20000 });
+  }
+  for (const path of ['/api/admin/support/tickets', '/api/admin/support/overview', '/api/admin/support/audit']) assert.equal((await page.request.get(`${BASE}${path}`)).status(), 404, path);
   await context.close();
 });
 
-check('support staff see the ticket area; ordinary members get a plain "Page introuvable"', async () => {
+check('support staff open the administration from the account page; ordinary members have no link', async () => {
   const subject = `Ticket navigateur ${run}`;
   const { context: memberContext, page: memberPage } = await register(browser);
-  await memberPage.goto(`${BASE}/admin/support`);
-  await memberPage.getByTestId('admin-denied').waitFor({ timeout: 20000 });
-  await memberPage.getByRole('heading', { name: 'Page introuvable' }).waitFor();
   await memberPage.goto(`${BASE}/account`);
   await memberPage.locator('[data-section="overview"]').waitFor({ timeout: 20000 });
   assert.equal(await memberPage.getByRole('link', { name: /Ouvrir les demandes d’aide/ }).count(), 0, 'no admin link for ordinary members');
+  await memberPage.getByTestId('my-support-link').waitFor();
   await memberContext.close();
 
   const { context, page, email } = await register(browser);
@@ -227,22 +224,25 @@ check('support staff see the ticket area; ordinary members get a plain "Page int
   await page.goto(`${BASE}/account`);
   await page.getByRole('link', { name: /Ouvrir les demandes d’aide/ }).click();
   await page.waitForURL(/\/admin\/support$/);
-  const card = page.locator(`[data-ticket="${reference}"]`);
-  await card.waitFor({ timeout: 20000 });
-  await card.getByRole('button', { name: new RegExp(subject) }).click();
-  await card.getByTestId('ticket-message').getByText(/Message laissé par un visiteur/).waitFor();
-  await card.getByRole('link', { name: 'Répondre par e-mail' }).waitFor();
-  await card.getByLabel(`Statut de ${reference}`).selectOption('in_progress');
-  await card.getByText('Statut mis à jour.').waitFor({ timeout: 10000 });
-  await page.getByRole('button', { name: /^En cours/ }).click(); // filter by the new status
-  await page.locator(`[data-ticket="${reference}"]`).waitFor();
-  await page.locator(`[data-ticket="${reference}"]`).getByRole('button', { name: new RegExp(subject) }).click();
-  await page.getByLabel(/Note interne/).fill('Pris en charge par le support.');
-  await page.getByRole('button', { name: 'Enregistrer la note' }).click();
-  await page.getByText('Note enregistrée.').waitFor({ timeout: 10000 });
+  await page.getByTestId('back-to-site').first().waitFor({ timeout: 20000 });
+  await page.goto(`${BASE}/admin/support/tickets?q=${reference}`);
+  const row = page.locator(`[data-testid="ticket-table"] [data-ticket="${reference}"]`);
+  await row.waitFor({ timeout: 20000 });
+  await row.getByRole('link', { name: new RegExp(subject) }).click();
+  await page.getByTestId('ticket-reference').getByText(reference).waitFor();
+  // sent while signed in, so the ticket belongs to an account and can receive an in-app reply
+  await page.getByLabel('Votre réponse à l’auteur').fill('Merci pour votre message, nous regardons cela.');
+  await page.getByTestId('send-message').click();
+  await page.getByTestId('ticket-notice').getByText(/Réponse publiée/).waitFor({ timeout: 10000 });
+  await page.getByLabel('Statut', { exact: true }).selectOption('in_progress');
+  await page.getByTestId('ticket-notice').getByText(/Statut : En cours/).waitFor({ timeout: 10000 });
+  await page.locator('[data-visibility="internal"]').click();
+  await page.getByLabel(/Votre note interne/).fill('Pris en charge par le support.');
+  await page.getByTestId('send-message').click();
+  await page.getByTestId('ticket-notice').getByText('Note interne ajoutée.').waitFor({ timeout: 10000 });
   await page.getByRole('button', { name: 'Supprimer la demande' }).click();
   await page.getByRole('button', { name: 'Supprimer', exact: true }).click();
-  await page.locator(`[data-ticket="${reference}"]`).waitFor({ state: 'detached', timeout: 10000 });
+  await page.waitForURL(/\/admin\/support\/tickets$/, { timeout: 15000 });
   await context.close();
 }, { skip: !GRANT });
 

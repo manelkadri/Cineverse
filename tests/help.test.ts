@@ -35,7 +35,7 @@ describe('help content structure', () => {
   });
 
   it('only links to pages that exist', () => {
-    const staticRoutes = new Set(['/', '/login', '/profiles', '/account', '/my-list', '/films-series-catalog', '/help', '/help#faq', '/help#contact']);
+    const staticRoutes = new Set(['/', '/login', '/profiles', '/account', '/account/support', '/my-list', '/films-series-catalog', '/help', '/help#faq', '/help#contact']);
     const routeExists = (route: string) => route === '/' ? existsSync(join(__dirname, '../src/app/page.tsx')) : existsSync(join(__dirname, '../src/app', route.slice(1), 'page.tsx'));
     const hrefs = [...HELP_ARTICLES.flatMap((article) => article.links), ...HELP_FAQ.flatMap((faq) => faq.links ?? [])].map((link) => link.href);
     assert.ok(hrefs.length > 20);
