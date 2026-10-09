@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { signOut } from 'next-auth/react';
-import { AlertTriangle, Check, CheckCircle2, Download, Eye, EyeOff, KeyRound, Laptop, LifeBuoy, Loader2, LogOut, Mail, Settings2, ShieldCheck, ShieldAlert, Trash2, UserRound, Users, XCircle } from 'lucide-react';
+import { AlertTriangle, Check, CheckCircle2, Download, Eye, EyeOff, KeyRound, Laptop, LifeBuoy, Megaphone, Loader2, LogOut, Mail, Settings2, ShieldCheck, ShieldAlert, Trash2, UserRound, Users, XCircle } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import ProfileAvatar from '@/components/ProfileAvatar';
@@ -169,9 +169,12 @@ function AccountContent({ data, reload, setData }: { data: AccountSummary; reloa
           <ProfilesSection profiles={profiles} />
           <SessionsSection sessions={sessions} reload={reload} />
           <PrivacySection />
+          <Section id="my-support" icon={LifeBuoy} title="Mes demandes d’aide" description="Suivez vos demandes et lisez les réponses de l’équipe.">
+            <Link href="/account/support" className={ghostButton} data-testid="my-support-link"><LifeBuoy size={16} aria-hidden="true" />Voir mes demandes</Link>
+          </Section>
           {data.supportAdmin && (
             <Section id="support-admin" icon={LifeBuoy} title="Administration du support" description="Réservé à l’équipe de support.">
-              <Link href="/admin/support" className={primaryButton}><LifeBuoy size={16} aria-hidden="true" />Ouvrir les demandes d’aide</Link>
+              <div className="flex flex-col gap-2.5 sm:flex-row"><Link href="/admin/support" className={primaryButton}><LifeBuoy size={16} aria-hidden="true" />Ouvrir les demandes d’aide</Link><Link href="/admin/announcements" className={ghostButton}><Megaphone size={16} aria-hidden="true" />Annonces</Link></div>
             </Section>
           )}
         </div>
@@ -265,10 +268,59 @@ function PasswordSection({ onChanged }: { onChanged: () => Promise<void> }) {
 }
 
 function PreferencesSection() {
+  const [prefs, setPrefs] = useState<{ catalogue: boolean; service: boolean } | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [saving, setSaving] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api<{ catalogue: boolean; service: boolean }>('/api/notifications/preferences', 'GET').then((result) => {
+      if (cancelled) return;
+      if (result.ok) setPrefs({ catalogue: result.body.catalogue, service: result.body.service });
+      else setLoadError(true);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const change = async (key: 'catalogue' | 'service', value: boolean) => {
+    if (!prefs || saving) return;
+    const previous = prefs;
+    setPrefs({ ...prefs, [key]: value });
+    setSaving(key); setNotice(null);
+    const result = await api<{ catalogue: boolean; service: boolean }>('/api/notifications/preferences', 'PUT', { [key]: value });
+    setSaving(null);
+    if (!result.ok) { setPrefs(previous); return setNotice({ kind: 'error', text: 'Le réglage n’a pas pu être enregistré. Réessayez.' }); }
+    setPrefs({ catalogue: result.body.catalogue, service: result.body.service });
+    setNotice({ kind: 'success', text: 'Préférence enregistrée.' });
+  };
+
+  const rows = [
+    { key: 'catalogue' as const, title: 'Nouveautés du catalogue', description: 'Annonces de nouveaux films et séries publiées par l’équipe.' },
+    { key: 'service' as const, title: 'Actualités du service', description: 'Informations sur les évolutions de CINEVERSE.' },
+  ];
+
   return (
-    <Section id="preferences" icon={Settings2} title="Préférences du compte" description="Réglages qui s’appliquent à l’ensemble du compte.">
-      <p className="text-sm leading-relaxed text-[#b7b7bd]">Aucun réglage au niveau du compte n’est disponible pour le moment : l’interface est en français et CINEVERSE n’envoie pas d’e-mails de notification. Les genres préférés et la langue se règlent <strong className="font-semibold text-white">par profil</strong>, depuis la gestion des profils.</p>
-      <Link href="/profiles" className={`${ghostButton} mt-4`}>Régler les préférences d’un profil</Link>
+    <Section id="preferences" icon={Settings2} title="Préférences du compte" description="Les notifications que vous souhaitez recevoir dans la cloche.">
+      {loadError ? <p role="alert" className="text-sm text-red-200">Impossible de charger vos préférences pour le moment.</p> : !prefs ? <div className="h-24 animate-pulse rounded-xl bg-white/[0.04] motion-reduce:animate-none" aria-busy="true" /> : (
+        <ul className="space-y-2.5" data-testid="notification-preferences">
+          {rows.map((row) => (
+            <li key={row.key} className="flex items-center gap-4 rounded-xl border border-white/[0.08] bg-black/20 p-3.5">
+              <div className="min-w-0 flex-1">
+                <p id={`pref-${row.key}-label`} className="text-sm font-bold">{row.title}</p>
+                <p id={`pref-${row.key}-help`} className="mt-0.5 text-xs text-[#8f8f94]">{row.description}</p>
+              </div>
+              <button type="button" role="switch" aria-checked={prefs[row.key]} aria-labelledby={`pref-${row.key}-label`} aria-describedby={`pref-${row.key}-help`} disabled={saving !== null} onClick={() => change(row.key, !prefs[row.key])} data-pref={row.key}
+                className={`relative h-7 w-12 shrink-0 rounded-full border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-60 motion-reduce:transition-none ${prefs[row.key] ? 'border-primary bg-primary' : 'border-white/20 bg-white/10'}`}>
+                <span aria-hidden="true" className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-all motion-reduce:transition-none ${prefs[row.key] ? 'left-[1.45rem]' : 'left-0.5'}`} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-4 flex items-start gap-2 text-xs leading-relaxed text-[#8f8f94]"><ShieldCheck size={15} className="mt-px shrink-0 text-emerald-400" aria-hidden="true" /><span>Les notifications de <strong className="font-semibold text-[#c3c3c9]">sécurité</strong> (mot de passe, codes PIN, sessions) et le <strong className="font-semibold text-[#c3c3c9]">suivi de vos demandes d’aide</strong> sont toujours activés : elles ne peuvent pas être désactivées.</span></p>
+      <p className="mt-2 text-xs leading-relaxed text-[#8f8f94]">Les genres préférés et la langue se règlent <strong className="font-semibold text-[#c3c3c9]">par profil</strong>, depuis la <Link href="/profiles" className="font-semibold text-white underline decoration-primary underline-offset-4">gestion des profils</Link>.</p>
+      <NoticeLine notice={notice} />
     </Section>
   );
 }

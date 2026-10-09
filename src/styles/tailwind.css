@@ -560,3 +560,10 @@ main { animation: cv-page-in 220ms ease-out backwards; }
   .cv-loading, .cv-bar--done .cv-bar__flash { animation: none; } /* progress itself is shown in coarse steps by the component */
   .cv-loading--leaving { transition: none; }
 }
+
+/* Notification panel (navbar bell): a short pop-in and pop-out; no movement at all under reduced motion */
+.cv-notif-panel { transform-origin: top right; animation: cv-notif-in 160ms ease-out both; }
+.cv-notif-panel--leaving { animation: cv-notif-out 130ms ease-in both; }
+@keyframes cv-notif-in { from { opacity: 0; transform: translateY(-6px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes cv-notif-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-6px) scale(0.98); } }
+@media (prefers-reduced-motion: reduce) { .cv-notif-panel, .cv-notif-panel--leaving { animation: none; } }

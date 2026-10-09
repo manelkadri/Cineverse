@@ -4,8 +4,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import CineverseLogo from '@/components/CineverseLogo';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Bell, Check, ChevronDown, CircleHelp, Home, ListVideo, LogOut, Menu, Pencil, Search, Settings, UserRound, X } from 'lucide-react';
+import { Check, ChevronDown, CircleHelp, Home, ListVideo, LogOut, Menu, Pencil, Search, Settings, UserRound, X } from 'lucide-react';
 import ProfileAvatar from './ProfileAvatar';
+import NotificationBell from './NotificationBell';
 import { useProfiles } from '@/context/ProfileContext';
 import { signOut } from 'next-auth/react';
 
@@ -95,7 +96,7 @@ export default function Navbar() {
               ) : (
                 <button type="button" onClick={() => setSearchOpen(true)} className="grid size-10 place-items-center rounded-full text-[#d6d6d8] hover:bg-white/10 hover:text-white" aria-label="Rechercher"><Search size={24} /></button>
               )}
-              <button type="button" className="relative grid size-10 place-items-center rounded-full text-[#d6d6d8] hover:bg-white/10 hover:text-white" aria-label="Notifications"><Bell size={22} /><span className="absolute right-[8px] top-[7px] size-1.5 rounded-full bg-primary ring-2 ring-black" /></button>
+              <NotificationBell />
 
               <div ref={profileMenuRef} className="relative ml-1">
                 <button type="button" onClick={() => setProfileMenuOpen((open) => !open)} className="group flex items-center gap-1" aria-label="Ouvrir le menu du profil" aria-haspopup="menu" aria-expanded={profileMenuOpen}>
@@ -104,7 +105,7 @@ export default function Navbar() {
                 </button>
 
                 {profileMenuOpen && (
-                  <div role="menu" className="absolute right-0 top-[49px] w-72 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-xl border border-white/[0.12] bg-[#111418]/98 text-white shadow-[0_24px_80px_rgba(0,0,0,0.7)] nav-blur sm:w-80">
+                  <div role="menu" className="absolute right-0 top-[49px] w-72 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-xl border border-white/[0.12] bg-[#111418] text-white shadow-[0_24px_80px_rgba(0,0,0,0.7)] nav-blur sm:w-80">
                     {selectedProfile && <div className="border-b border-white/[0.08] px-4 py-3"><p className="text-sm font-bold">{selectedProfile.name}</p><p className="mt-0.5 text-[11px] text-muted-foreground">{selectedProfile.isKids ? 'Profil enfant protégé' : 'Profil actif'}</p></div>}
                     <div className="p-2">
                       {profiles.map((profile) => {
@@ -127,7 +128,7 @@ export default function Navbar() {
           </div>
         </div>
 
-        {mobileOpen && <div className="border-t border-white/10 bg-[#08090b]/98 px-5 py-2 md:hidden">{navigation.map((item) => { const active = isActive(item.label, item.href); return <Link key={item.label} href={item.href} className={`flex items-center border-l-2 px-4 py-3 text-sm font-semibold ${active ? 'border-primary bg-white/[0.05] text-white' : 'border-transparent text-[#a9a9ad]'}`} onClick={() => setMobileOpen(false)}>{item.label}</Link>; })}</div>}
+        {mobileOpen && <div className="border-t border-white/10 bg-[#08090b]/95 px-5 py-2 md:hidden">{navigation.map((item) => { const active = isActive(item.label, item.href); return <Link key={item.label} href={item.href} className={`flex items-center border-l-2 px-4 py-3 text-sm font-semibold ${active ? 'border-primary bg-white/[0.05] text-white' : 'border-transparent text-[#a9a9ad]'}`} onClick={() => setMobileOpen(false)}>{item.label}</Link>; })}</div>}
       </nav>
 
       <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-[#08090b]/95 nav-blur md:hidden" aria-label="Navigation mobile">
