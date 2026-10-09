@@ -1,23 +1,30 @@
 import { compare, hash } from 'bcryptjs';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { authenticatedUserId } from '@/lib/server-auth';
+import { authenticatedContext } from '@/lib/server-auth';
 import { isAuthRuntimeConfigured } from '@/lib/auth-security';
-import { profileInclude, toClientProfile } from '@/lib/profile-db';
-import { profilePatchSchema } from '@/lib/validation';
+import { profileInclude, toClientProfile, toLockedProfile } from '@/lib/profile-db';
+import { profileDeleteSchema, profilePatchSchema } from '@/lib/validation';
+import { reauthDenied, verifyAccountPassword } from '@/lib/account-reauth';
+import { unlockCookieName, unlockedProfileId } from '@/lib/profile-unlock';
 
 export const runtime = 'nodejs';
 
+// Editing a profile is a management action: it needs the account password again (fresh authentication), whatever
+// the unlock state, so someone who merely sits at a signed-in device cannot rename, restyle or reconfigure profiles.
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!isAuthRuntimeConfigured()) return NextResponse.json({ error: 'Database authentication is not configured' }, { status: 503 });
-  const userId = await authenticatedUserId();
-  if (!userId) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  const context = await authenticatedContext();
+  if (!context) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  const userId = context.userId;
   const { id } = await params;
   const parsed = profilePatchSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid profile data', fields: parsed.error.flatten().fieldErrors }, { status: 400 });
   const current = await prisma.profile.findFirst({ where: { id, userId } });
   if (!current) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
-  const input = parsed.data;
+  const { password, ...input } = parsed.data;
+  const denied = reauthDenied(await verifyAccountPassword(userId, password, request.headers));
+  if (denied) return denied;
   const changesParentalSettings = input.isKids !== undefined || input.maturityLevel !== undefined;
   if (changesParentalSettings && current.parentalPinHash) {
     const validPin = Boolean(input.parentalPin && await compare(input.parentalPin, current.parentalPinHash));
@@ -42,24 +49,35 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     },
     include: profileInclude,
   });
-  return NextResponse.json({ profile: toClientProfile(profile) });
+  const unlocked = (await unlockedProfileId(context)) === profile.id;
+  return NextResponse.json({ profile: unlocked ? toClientProfile(profile) : toLockedProfile(profile) });
 }
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!isAuthRuntimeConfigured()) return NextResponse.json({ error: 'Database authentication is not configured' }, { status: 503 });
-  const userId = await authenticatedUserId();
-  if (!userId) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  const context = await authenticatedContext();
+  if (!context) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  const userId = context.userId;
   const { id } = await params;
   const profile = await prisma.profile.findFirst({ where: { id, userId }, select: { id: true, parentalPinHash: true } });
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+  const body = await request.json().catch(() => null);
+  // an empty or missing password is reported as such; any other malformed field is a different, generic error
+  if (typeof body?.password !== 'string' || body.password.length === 0) return NextResponse.json({ error: 'Le mot de passe du compte est requis pour supprimer un profil.', code: 'PASSWORD_REQUIRED' }, { status: 400 });
+  const parsed = profileDeleteSchema.safeParse(body);
+  if (!parsed.success) return NextResponse.json({ error: 'Demande de suppression invalide.', code: 'INVALID_REQUEST' }, { status: 400 });
+  const denied = reauthDenied(await verifyAccountPassword(userId, parsed.data.password, request.headers));
+  if (denied) return denied;
   if (profile.parentalPinHash) {
-    const body = await request.json().catch(() => ({})) as { parentalPin?: string };
-    const validPin = Boolean(body.parentalPin && await compare(body.parentalPin, profile.parentalPinHash));
+    const validPin = Boolean(parsed.data.parentalPin && await compare(parsed.data.parentalPin, profile.parentalPinHash));
     if (!validPin) return NextResponse.json({ error: 'Valid parental PIN required' }, { status: 403 });
   }
+  const wasUnlocked = (await unlockedProfileId(context)) === id;
   await prisma.$transaction([
     prisma.profile.delete({ where: { id } }),
     prisma.user.updateMany({ where: { id: userId, selectedProfileId: id }, data: { selectedProfileId: null } }),
   ]);
-  return NextResponse.json({ deleted: true });
+  const response = NextResponse.json({ deleted: true });
+  if (wasUnlocked) response.cookies.delete(unlockCookieName());
+  return response;
 }

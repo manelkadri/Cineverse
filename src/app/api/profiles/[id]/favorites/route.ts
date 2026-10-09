@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { authenticatedUserId } from '@/lib/server-auth';
 import { isAuthRuntimeConfigured } from '@/lib/auth-security';
-import { ensureProfileMediaAllowed, ownedProfile } from '@/lib/profile-access';
+import { ensureProfileMediaAllowed, requireUnlockedProfile } from '@/lib/profile-access';
 import { mediaDataFor } from '@/lib/profile-db';
 import { mediaActionSchema } from '@/lib/validation';
 
@@ -10,14 +9,12 @@ export const runtime = 'nodejs';
 
 async function context(request: Request, params: Promise<{ id: string }>) {
   if (!isAuthRuntimeConfigured()) return { response: NextResponse.json({ error: 'Database authentication is not configured' }, { status: 503 }) };
-  const userId = await authenticatedUserId();
-  if (!userId) return { response: NextResponse.json({ error: 'Authentication required' }, { status: 401 }) };
   const { id } = await params;
-  const profile = await ownedProfile(userId, id);
-  if (!profile) return { response: NextResponse.json({ error: 'Profile not found' }, { status: 404 }) };
+  const gate = await requireUnlockedProfile(id);
+  if ('response' in gate) return { response: gate.response };
   const parsed = mediaActionSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return { response: NextResponse.json({ error: 'Invalid media identifier' }, { status: 400 }) };
-  return { profile, mediaId: parsed.data.mediaId };
+  return { profile: gate.profile, mediaId: parsed.data.mediaId };
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {

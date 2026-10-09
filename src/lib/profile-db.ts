@@ -14,6 +14,8 @@ export type DatabaseProfile = Prisma.ProfileGetPayload<{ include: typeof profile
 
 export function toClientProfile(profile: DatabaseProfile): CineverseProfile {
   return {
+    hasPin: Boolean(profile.profilePinHash),
+    locked: false,
     id: profile.id,
     name: profile.name,
     avatar: profile.avatar,
@@ -29,6 +31,15 @@ export function toClientProfile(profile: DatabaseProfile): CineverseProfile {
       durationSeconds: item.durationSeconds,
       updatedAt: ('updatedAt' in item ? item.updatedAt : item.lastWatchedAt).toISOString(),
     })),
+  };
+}
+
+/** What the browser may see of a profile that is not unlocked in this session: identity only, no personal data. */
+export function toLockedProfile(profile: Pick<DatabaseProfile, 'id' | 'name' | 'avatar' | 'isKids' | 'maturityLevel' | 'language' | 'profilePinHash'>): CineverseProfile {
+  return {
+    id: profile.id, name: profile.name, avatar: profile.avatar, isKids: profile.isKids, maturityLevel: profile.maturityLevel, language: profile.language,
+    hasPin: Boolean(profile.profilePinHash), locked: true,
+    preferences: [], watchlist: [], favorites: [], history: [],
   };
 }
 

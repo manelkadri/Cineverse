@@ -18,6 +18,10 @@ export interface CineverseProfile {
   watchlist: string[];
   favorites: string[];
   history: ViewingProgress[];
+  /** Whether the profile has its 4-digit PIN (false only for profiles created before PIN protection). */
+  hasPin: boolean;
+  /** True when the profile is not unlocked in this login session; locked profiles carry no personal data. */
+  locked: boolean;
 }
 
 export interface ProfileDraft {
@@ -28,6 +32,9 @@ export interface ProfileDraft {
   preferences: string[];
   language?: string;
   parentalPin?: string;
+  /** The profile PIN, entered twice, when creating a profile. */
+  pin?: string;
+  confirmPin?: string;
 }
 
 export interface ContentItem {
@@ -44,3 +51,6 @@ export interface ContentItem {
   durationSeconds: number;
   overview?: string;
 }
+
+/** An edit of an existing profile; `preferences` is left out for a locked profile, whose preferences are not loaded. */
+export type ProfileUpdate = Omit<ProfileDraft, 'preferences'> & { preferences?: string[] };

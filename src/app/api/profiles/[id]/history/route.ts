@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { authenticatedUserId } from '@/lib/server-auth';
 import { isAuthRuntimeConfigured } from '@/lib/auth-security';
-import { ensureProfileMediaAllowed, ownedProfile } from '@/lib/profile-access';
+import { ensureProfileMediaAllowed, requireUnlockedProfile } from '@/lib/profile-access';
 import { mediaDataFor } from '@/lib/profile-db';
 import { mediaActionSchema, progressInputSchema } from '@/lib/validation';
 import { playbackCompleted, playbackProgressKey } from '@/lib/viewing';
@@ -11,11 +10,10 @@ export const runtime = 'nodejs';
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!isAuthRuntimeConfigured()) return NextResponse.json({ error: 'Database authentication is not configured' }, { status: 503 });
-  const userId = await authenticatedUserId();
-  if (!userId) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   const { id } = await params;
-  const profile = await ownedProfile(userId, id);
-  if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+  const gate = await requireUnlockedProfile(id);
+  if ('response' in gate) return gate.response;
+  const profile = gate.profile;
   if (process.env.AUTHORIZED_PLAYBACK_ENABLED !== 'true') return NextResponse.json({ error: 'No authorized playback source is configured' }, { status: 409 });
   const parsed = progressInputSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid playback progress' }, { status: 400 });
@@ -41,11 +39,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!isAuthRuntimeConfigured()) return NextResponse.json({ error: 'Database authentication is not configured' }, { status: 503 });
-  const userId = await authenticatedUserId();
-  if (!userId) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
   const { id } = await params;
-  const profile = await ownedProfile(userId, id);
-  if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+  const gate = await requireUnlockedProfile(id);
+  if ('response' in gate) return gate.response;
+  const profile = gate.profile;
   const parsed = mediaActionSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid media identifier' }, { status: 400 });
   await prisma.$transaction([
