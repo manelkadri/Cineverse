@@ -69,6 +69,8 @@ const userA = { name: 'Alice Test', email: `${E2E_EMAIL_PREFIX}alice+${run}@exam
 const userB = { name: 'Bob Test', email: `${E2E_EMAIL_PREFIX}bob+${run}@example.com`, password: PASSWORD };
 const ADULT_MOVIE = 'movie:293660'; // Deadpool (R-rated) - must be refused for kids profiles
 const FAMILY_MOVIE = 'movie:862'; // Toy Story
+const ADULT_PIN = '7392';
+const KIDS_PIN = '4821';
 
 describe('CINEVERSE end-to-end (isolated database)', { skip: !BASE }, () => {
   const alice = new Client();
@@ -118,57 +120,83 @@ describe('CINEVERSE end-to-end (isolated database)', { skip: !BASE }, () => {
     assert.equal((await bob.session()).body.user.email, userB.email);
   });
 
-  it('creates, lists, edits and selects profiles', async () => {
-    const created = await alice.json('/api/profiles', {
-      method: 'POST',
-      json: { name: 'Alice', avatar: 'avatar-1', isKids: false, maturityLevel: 18, preferences: ['Action'], language: 'fr-FR' },
-    });
+  // Every profile has its own PIN; using a profile means unlocking it first (one unlocked profile per login session).
+  const unlock = async (client: Client, profileId: string, pin: string) => {
+    const res = await client.json(`/api/profiles/${profileId}/unlock`, { method: 'POST', json: { pin } });
+    assert.equal(res.status, 200, `unlocking ${profileId} returned ${res.status}`);
+    return res;
+  };
+
+  it('creates profiles (PIN required), lists them locked, and edits only with the account password', async () => {
+    const base = { name: 'Alice', avatar: 'avatar-1', isKids: false, maturityLevel: 18, preferences: ['Action'], language: 'fr-FR' };
+    assert.equal((await alice.json('/api/profiles', { method: 'POST', json: base })).status, 400, 'a profile without a PIN is refused');
+    assert.equal((await alice.json('/api/profiles', { method: 'POST', json: { ...base, pin: '1234', confirmPin: '1234' } })).status, 400, 'weak PIN refused');
+    assert.equal((await alice.json('/api/profiles', { method: 'POST', json: { ...base, pin: '7392', confirmPin: '7391' } })).status, 400, 'mismatched confirmation refused');
+
+    const created = await alice.json('/api/profiles', { method: 'POST', json: { ...base, pin: ADULT_PIN, confirmPin: ADULT_PIN } });
     assert.equal(created.status, 201);
     adultId = created.body.profile.id;
+    assert.equal(created.body.profile.locked, true);
+    assert.equal(created.body.profile.hasPin, true);
+    assert.equal(JSON.stringify(created.body).includes('PinHash'), false, 'no hash is ever sent to the browser');
+    assert.equal(JSON.stringify(created.body).includes(ADULT_PIN), false, 'the PIN is never echoed');
 
-    const noPin = await alice.json('/api/profiles', {
+    const noParental = await alice.json('/api/profiles', {
       method: 'POST',
-      json: { name: 'Junior', avatar: 'avatar-2', isKids: true, maturityLevel: 7, preferences: [], language: 'fr-FR' },
+      json: { name: 'Junior', avatar: 'avatar-2', isKids: true, maturityLevel: 7, preferences: [], language: 'fr-FR', pin: KIDS_PIN, confirmPin: KIDS_PIN },
     });
-    assert.equal(noPin.status, 400);
+    assert.equal(noParental.status, 400);
 
     const kids = await alice.json('/api/profiles', {
       method: 'POST',
-      json: { name: 'Junior', avatar: 'avatar-2', isKids: true, maturityLevel: 7, preferences: [], language: 'fr-FR', parentalPin: '1234' },
+      json: { name: 'Junior', avatar: 'avatar-2', isKids: true, maturityLevel: 7, preferences: [], language: 'fr-FR', parentalPin: '1234', pin: KIDS_PIN, confirmPin: KIDS_PIN },
     });
     assert.equal(kids.status, 201);
     kidsId = kids.body.profile.id;
-    assert.equal(kids.body.profile.parentalPin, undefined);
     assert.equal(JSON.stringify(kids.body).includes('parentalPinHash'), false);
 
-    const renamed = await alice.json(`/api/profiles/${adultId}`, { method: 'PATCH', json: { name: 'Alicia', avatar: 'avatar-3', preferences: ['Drame'] } });
+    await unlock(alice, adultId, ADULT_PIN);
+    const noPassword = await alice.json(`/api/profiles/${adultId}`, { method: 'PATCH', json: { name: 'Alicia' } });
+    assert.equal(noPassword.status, 400, 'editing needs the account password');
+    const wrongPassword = await alice.json(`/api/profiles/${adultId}`, { method: 'PATCH', json: { name: 'Alicia', password: 'Wrong-Password-123' } });
+    assert.equal(wrongPassword.status, 403);
+    const renamed = await alice.json(`/api/profiles/${adultId}`, { method: 'PATCH', json: { name: 'Alicia', avatar: 'avatar-3', preferences: ['Drame'], password: PASSWORD } });
     assert.equal(renamed.status, 200);
     assert.equal(renamed.body.profile.name, 'Alicia');
     assert.equal(renamed.body.profile.avatar, 'avatar-3');
 
-    assert.equal((await alice.json('/api/profiles/selected', { method: 'PUT', json: { profileId: kidsId } })).status, 200);
+    // only the unlocked profile shows its personal data and counts as selected
     const listed = await alice.json('/api/profiles');
     assert.equal(listed.body.profiles.length, 2);
-    assert.equal(listed.body.selectedProfileId, kidsId);
+    assert.equal(listed.body.selectedProfileId, adultId);
     assert.deepEqual(listed.body.profiles.find((p: any) => p.id === adultId).preferences, ['Drame']);
+    const lockedKids = listed.body.profiles.find((p: any) => p.id === kidsId);
+    assert.equal(lockedKids.locked, true);
+    assert.deepEqual([lockedKids.watchlist, lockedKids.favorites, lockedKids.history, lockedKids.preferences], [[], [], [], []]);
+
+    // selecting needs the unlock: kids is locked right now
+    assert.equal((await alice.json('/api/profiles/selected', { method: 'PUT', json: { profileId: kidsId } })).status, 403);
+    await unlock(alice, kidsId, KIDS_PIN);
+    assert.equal((await alice.json('/api/profiles')).body.selectedProfileId, kidsId);
   });
 
   it('persists watchlist and favorites per profile with movie/tv separation', async () => {
-    const add = (kind: string, id: string, mediaId: string, pid = adultId) =>
-      alice.json(`/api/profiles/${pid}/${kind}`, { method: 'POST', json: { mediaId } });
-    assert.equal((await add('watchlist', adultId, 'movie:550')).status, 200);
-    assert.equal((await add('watchlist', adultId, 'tv:550')).status, 200);
-    assert.equal((await add('watchlist', adultId, 'movie:550')).status, 200); // idempotent
-    assert.equal((await add('favorites', adultId, 'movie:550')).status, 200);
+    await unlock(alice, adultId, ADULT_PIN);
+    const add = (kind: string, mediaId: string, pid = adultId) => alice.json(`/api/profiles/${pid}/${kind}`, { method: 'POST', json: { mediaId } });
+    assert.equal((await add('watchlist', 'movie:550')).status, 200);
+    assert.equal((await add('watchlist', 'tv:550')).status, 200);
+    assert.equal((await add('watchlist', 'movie:550')).status, 200); // idempotent
+    assert.equal((await add('favorites', 'movie:550')).status, 200);
 
-    // A "refresh": a brand-new client logging in again sees the same data.
+    // A "refresh": a brand-new login session sees the same data once the profile is unlocked there.
     const fresh = new Client();
     await fresh.login(userA.email, userA.password);
-    const profiles = (await fresh.json('/api/profiles')).body.profiles;
-    const p = profiles.find((x: any) => x.id === adultId);
+    const lockedView = (await fresh.json('/api/profiles')).body.profiles.find((x: any) => x.id === adultId);
+    assert.deepEqual(lockedView.watchlist, [], 'a new session sees nothing until the PIN is entered');
+    await unlock(fresh, adultId, ADULT_PIN);
+    const p = (await fresh.json('/api/profiles')).body.profiles.find((x: any) => x.id === adultId);
     assert.deepEqual([...p.watchlist].sort(), ['movie:550', 'tv:550']);
     assert.deepEqual(p.favorites, ['movie:550']);
-    assert.deepEqual(profiles.find((x: any) => x.id === kidsId).watchlist, []);
 
     assert.equal((await alice.json(`/api/profiles/${adultId}/watchlist`, { method: 'DELETE', json: { mediaId: 'tv:550' } })).status, 200);
     assert.equal((await alice.json(`/api/profiles/${adultId}/favorites`, { method: 'DELETE', json: { mediaId: 'movie:550' } })).status, 200);
@@ -202,12 +230,15 @@ describe('CINEVERSE end-to-end (isolated database)', { skip: !BASE }, () => {
   it('enforces profile ownership for another authenticated user', async () => {
     const created = await bob.json('/api/profiles', {
       method: 'POST',
-      json: { name: 'Bob', avatar: 'avatar-1', isKids: false, maturityLevel: 18, preferences: [], language: 'fr-FR' },
+      json: { name: 'Bob', avatar: 'avatar-1', isKids: false, maturityLevel: 18, preferences: [], language: 'fr-FR', pin: '5038', confirmPin: '5038' },
     });
     bobProfileId = created.body.profile.id;
+    await unlock(bob, bobProfileId, '5038');
 
-    assert.equal((await bob.json(`/api/profiles/${adultId}`, { method: 'PATCH', json: { name: 'Hacked' } })).status, 404);
-    assert.equal((await bob.json(`/api/profiles/${adultId}`, { method: 'DELETE' })).status, 404);
+    assert.equal((await bob.json(`/api/profiles/${adultId}`, { method: 'PATCH', json: { name: 'Hacked', password: PASSWORD } })).status, 404);
+    assert.equal((await bob.json(`/api/profiles/${adultId}`, { method: 'DELETE', json: { password: PASSWORD } })).status, 404);
+    assert.equal((await bob.json(`/api/profiles/${adultId}/unlock`, { method: 'POST', json: { pin: ADULT_PIN } })).status, 404, "even the right PIN cannot unlock someone else's profile");
+    assert.equal((await bob.json(`/api/profiles/${adultId}/pin`, { method: 'PUT', json: { pin: '7392', confirmPin: '7392', password: PASSWORD } })).status, 404);
     assert.equal((await bob.json(`/api/profiles/${adultId}/watchlist`, { method: 'POST', json: { mediaId: 'movie:1' } })).status, 404);
     assert.equal((await bob.json(`/api/profiles/${adultId}/favorites`, { method: 'POST', json: { mediaId: 'movie:1' } })).status, 404);
     assert.equal((await bob.json(`/api/profiles/${adultId}/history`, { method: 'POST', json: { mediaId: 'movie:1', positionSeconds: 1, durationSeconds: 10 } })).status, 404);
@@ -216,6 +247,7 @@ describe('CINEVERSE end-to-end (isolated database)', { skip: !BASE }, () => {
 
     const bobsView = (await bob.json('/api/profiles')).body.profiles;
     assert.deepEqual(bobsView.map((p: any) => p.id), [bobProfileId]);
+    await unlock(alice, adultId, ADULT_PIN);
     const aliceStill = (await alice.json('/api/profiles')).body.profiles.find((x: any) => x.id === adultId);
     assert.equal(aliceStill.name, 'Alicia');
   });
@@ -226,6 +258,7 @@ describe('CINEVERSE end-to-end (isolated database)', { skip: !BASE }, () => {
   });
 
   it('enforces kids restrictions and parental PIN on the server', async () => {
+    await unlock(alice, kidsId, KIDS_PIN);
     const blocked = await alice.json(`/api/profiles/${kidsId}/watchlist`, { method: 'POST', json: { mediaId: ADULT_MOVIE } });
     assert.equal(blocked.status, 403);
     const allowedFav = await alice.json(`/api/profiles/${kidsId}/favorites`, { method: 'POST', json: { mediaId: ADULT_MOVIE } });
@@ -233,16 +266,20 @@ describe('CINEVERSE end-to-end (isolated database)', { skip: !BASE }, () => {
     const ok = await alice.json(`/api/profiles/${kidsId}/watchlist`, { method: 'POST', json: { mediaId: FAMILY_MOVIE } });
     assert.equal(ok.status, 200);
 
-    assert.equal((await alice.json(`/api/profiles/${kidsId}`, { method: 'PATCH', json: { isKids: false, maturityLevel: 18 } })).status, 403);
-    assert.equal((await alice.json(`/api/profiles/${kidsId}`, { method: 'PATCH', json: { isKids: false, maturityLevel: 18, parentalPin: '0000' } })).status, 403);
-    assert.equal((await alice.json(`/api/profiles/${kidsId}`, { method: 'DELETE' })).status, 403);
+    const parental = (json: object) => alice.json(`/api/profiles/${kidsId}`, { method: 'PATCH', json: { isKids: false, maturityLevel: 18, password: PASSWORD, ...json } });
+    assert.equal((await parental({})).status, 403, 'lifting restrictions needs the parental PIN even with the account password');
+    assert.equal((await parental({ parentalPin: '0000' })).status, 403);
+    assert.equal((await alice.json(`/api/profiles/${kidsId}`, { method: 'DELETE', json: { password: PASSWORD } })).status, 403);
   });
 
-  it('serves recommendations for the owned profile', async () => {
+  it('serves recommendations for the unlocked profile only', async () => {
+    await unlock(alice, adultId, ADULT_PIN);
     const res = await alice.json('/api/recommendations', { method: 'POST', json: { profileId: adultId } });
     assert.equal(res.status, 200);
     assert.ok(Array.isArray(res.body.recommendations));
     assert.ok(res.body.recommendations.length > 0, 'expected live TMDB recommendations');
+    assert.equal((await alice.json('/api/recommendations', { method: 'POST', json: { profileId: kidsId } })).status, 403, 'the kids profile is locked now');
+    await unlock(alice, kidsId, KIDS_PIN);
     const kidsRecs = await alice.json('/api/recommendations', { method: 'POST', json: { profileId: kidsId } });
     assert.equal(kidsRecs.status, 200);
     assert.equal(JSON.stringify(kidsRecs.body).includes('"adult":true'), false);
@@ -254,27 +291,31 @@ describe('CINEVERSE end-to-end (isolated database)', { skip: !BASE }, () => {
     assert.ok(JSON.stringify(res.body).includes('Interstellar'));
   });
 
-  it('persists everything after logout and a new login session', async () => {
+  it('persists everything after logout and a new login session, behind the PINs', async () => {
     await alice.logout();
     assert.deepEqual((await alice.session()).body, {});
     const again = new Client();
     await again.login(userA.email, userA.password);
-    const { profiles, selectedProfileId } = (await again.json('/api/profiles')).body;
-    assert.equal(selectedProfileId, kidsId);
-    const adult = profiles.find((p: any) => p.id === adultId);
-    const kid = profiles.find((p: any) => p.id === kidsId);
+    const first = (await again.json('/api/profiles')).body;
+    assert.equal(first.selectedProfileId, null, 'a new login session starts with no unlocked profile');
+    assert.ok(first.profiles.every((p: any) => p.locked && p.watchlist.length === 0));
+    await unlock(again, adultId, ADULT_PIN);
+    const adult = (await again.json('/api/profiles')).body.profiles.find((p: any) => p.id === adultId);
     assert.equal(adult.name, 'Alicia');
     assert.deepEqual(adult.preferences, ['Drame']);
     assert.deepEqual(adult.watchlist, ['movie:550']);
     assert.ok(adult.history.some((h: any) => h.mediaId === 'tv:1399'));
+    await unlock(again, kidsId, KIDS_PIN);
+    const kid = (await again.json('/api/profiles')).body.profiles.find((p: any) => p.id === kidsId);
     assert.equal(kid.isKids, true);
     assert.deepEqual(kid.watchlist, [FAMILY_MOVIE]);
     alice.adopt(again);
   });
 
-  it('deletes profiles (kids with PIN) and cascades their data', async () => {
-    assert.equal((await alice.json(`/api/profiles/${kidsId}`, { method: 'DELETE', json: { parentalPin: '1234' } })).status, 200);
-    assert.equal((await alice.json(`/api/profiles/${adultId}`, { method: 'DELETE' })).status, 200);
+  it('deletes profiles (account password, plus the parental PIN for kids) and cascades their data', async () => {
+    assert.equal((await alice.json(`/api/profiles/${kidsId}`, { method: 'DELETE', json: { parentalPin: '1234' } })).status, 400, 'password required');
+    assert.equal((await alice.json(`/api/profiles/${kidsId}`, { method: 'DELETE', json: { password: PASSWORD, parentalPin: '1234' } })).status, 200);
+    assert.equal((await alice.json(`/api/profiles/${adultId}`, { method: 'DELETE', json: { password: PASSWORD } })).status, 200);
     const left = (await alice.json('/api/profiles')).body;
     assert.equal(left.profiles.length, 0);
     assert.equal(left.selectedProfileId, null);

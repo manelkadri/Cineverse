@@ -10,6 +10,7 @@ import { chromium } from 'playwright';
 
 const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:4101';
 const SEL = '[data-cinematic-transition]';
+const PIN = '7392'; // every profile is protected by its own PIN
 const results = [];
 const check = (name, fn) => results.push({ name, fn });
 
@@ -70,7 +71,7 @@ async function newUser(browser, { viewport, reducedMotion = false, profiles = ['
   await page.getByRole('button', { name: 'Créer le compte' }).click();
   await page.waitForURL(/\/profiles/, { timeout: 20000 });
   for (const name of profiles) {
-    const response = await page.request.post(`${BASE}/api/profiles`, { data: { name, avatar: 'ember', isKids: false, maturityLevel: 18, preferences: [], language: 'fr-FR' } });
+    const response = await page.request.post(`${BASE}/api/profiles`, { data: { name, avatar: 'ember', isKids: false, maturityLevel: 18, preferences: [], language: 'fr-FR', pin: PIN, confirmPin: PIN } });
     assert.equal(response.status(), 201, `creating profile ${name}`);
   }
   await page.goto(`${BASE}/profiles`);
@@ -79,12 +80,28 @@ async function newUser(browser, { viewport, reducedMotion = false, profiles = ['
   return { context, page, errors };
 }
 
-const waitForIntroEnd = (page, timeout = 40000) => page.waitForFunction(() => window.__ct.removedAt !== null, null, { timeout });
+const waitForIntroEnd = (page, timeout = 40000) => page.waitForFunction(() => window.__ct.removedAt !== null, null, { timeout }).catch(async (error) => {
+  const state = await page.evaluate(() => ({ seen: window.__ct.seen, frames: window.__ct.frames.length, dots: document.querySelectorAll('[data-pin-dot]').length, problem: document.querySelector('#pin-problem')?.textContent ?? null })).catch(() => null);
+  throw new Error(`${error.message.split('\n')[0]} at ${page.url()} ${JSON.stringify(state)}`);
+});
 const heroVisible = (page) => page.locator('h1').first().waitFor({ timeout: 30000 });
+
+// Opens the PIN screen of a profile and types its code (the field is focused automatically).
+async function openAndType(page, name, pin = PIN) {
+  await page.getByRole('button', { name: `Continuer avec ${name}` }).click();
+  await page.waitForURL(/\/unlock$/, { timeout: 20000 });
+  await page.locator('#profile-pin').waitFor({ state: 'attached' });
+  await page.keyboard.type(pin, { delay: 40 });
+}
 
 async function selectAndWatch(page, name) {
   await resetLog(page);
   await page.getByRole('button', { name: `Continuer avec ${name}` }).click();
+  // choosing a profile opens its PIN screen; the cinematic intro starts only once the PIN was accepted
+  await page.waitForURL(/\/unlock$/, { timeout: 20000 });
+  assert.equal(await overlays(page), 0, 'no cinematic overlay while the PIN is still being asked');
+  await page.locator('#profile-pin').waitFor({ state: 'attached' });
+  await page.keyboard.type(PIN, { delay: 40 });
   await waitForIntroEnd(page);
   await page.waitForURL(`${BASE}/`, { timeout: 20000 });
   await heroVisible(page);
@@ -172,18 +189,19 @@ for (const [vp, viewport] of VIEWPORTS) {
 
 const DESKTOP = { width: 1440, height: 900 };
 
-check('F. a failed profile selection shows an error, no false success, no loader, and a retry then works', async () => {
+check('F. a failed PIN verification (server error) shows an error, no false success, no loader, and a retry then works', async () => {
   const { context, page } = await newUser(browser, { viewport: DESKTOP });
-  await page.route('**/api/profiles/selected', (route) => route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Erreur simulée' }) }));
+  await page.route('**/api/profiles/*/unlock', (route) => route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Erreur simulée' }) }));
   await resetLog(page);
-  await page.getByRole('button', { name: 'Continuer avec Alex' }).click();
+  await openAndType(page, 'Alex');
   await page.locator('[role="alert"]').first().waitFor({ timeout: 10000 });
   await page.waitForTimeout(800);
-  assert.equal((await readLog(page)).added, 0, 'no overlay for a failed selection');
-  assert.match(page.url(), /\/profiles/);
-  assert.equal(await page.getByRole('button', { name: 'Continuer avec Alex' }).isDisabled(), false, 'profiles can be chosen again');
-  await page.unroute('**/api/profiles/selected');
-  const { log } = await selectAndWatch(page, 'Alex');
+  assert.equal((await readLog(page)).added, 0, 'no overlay for a failed verification');
+  assert.match(page.url(), /\/unlock$/);
+  await page.unroute('**/api/profiles/*/unlock');
+  await page.keyboard.type(PIN, { delay: 40 }); // the field was cleared and refocused
+  await waitForIntroEnd(page);
+  const log = await readLog(page);
   assert.equal(log.added, 1, 'the retry plays the intro once');
   await context.close();
 });
@@ -211,20 +229,23 @@ check('H. a fast homepage completes promptly with no long artificial wait', asyn
   const { context, page } = await newUser(browser, { viewport: DESKTOP });
   const { stats } = await selectAndWatch(page, 'Alex');
   assert.ok(stats.durationMs < 5000, `intro lasted ${stats.durationMs} ms`);
-  assert.ok(stats.monotonic && stats.first <= 0.03 && stats.last >= 0.999);
+  assert.ok(stats.monotonic && stats.first <= 0.03 && stats.last >= 0.999, `stats ${JSON.stringify({ m: stats.monotonic, f: stats.first, l: stats.last, n: stats.frames, p: stats.phases })}`);
   console.log(`      (fast homepage: intro lasted ${stats.durationMs} ms)`);
   await context.close();
 });
 
-check('J. double-clicking a profile selects it once and plays one intro', async () => {
+check('J. typing the code verifies it once and plays one intro (no duplicate submit)', async () => {
   const { context, page } = await newUser(browser, { viewport: DESKTOP });
-  let puts = 0;
-  await page.route('**/api/profiles/selected', (route) => { puts++; return route.continue(); });
+  let unlocks = 0;
+  await page.route('**/api/profiles/*/unlock', (route) => { unlocks++; return route.continue(); });
   await resetLog(page);
   await page.getByRole('button', { name: 'Continuer avec Alex' }).dblclick();
+  await page.waitForURL(/\/unlock$/, { timeout: 20000 });
+  await page.locator('#profile-pin').waitFor({ state: 'attached' });
+  await page.keyboard.type(PIN + PIN, { delay: 25 }); // extra digits after the 4th are ignored
   await waitForIntroEnd(page);
   const log = await readLog(page);
-  assert.equal(puts, 1, 'one selection request');
+  assert.equal(unlocks, 1, 'one verification request');
   assert.equal(log.added, 1);
   assert.equal(log.maxSimultaneous, 1);
   await context.close();
@@ -247,7 +268,7 @@ check('L. a homepage that never becomes ready shows recovery options instead of 
   const { context, page } = await newUser(browser, { viewport: DESKTOP });
   await hangRequests(page, { on: true });
   await resetLog(page);
-  await page.getByRole('button', { name: 'Continuer avec Alex' }).click();
+  await openAndType(page, 'Alex');
   await page.getByRole('button', { name: 'Réessayer' }).waitFor({ timeout: 30000 });
   const log = await readLog(page);
   const stats = analyse(log);
@@ -264,7 +285,7 @@ check('M. Réessayer reloads the homepage for real and ends up on it, with no in
   const { context, page } = await newUser(browser, { viewport: DESKTOP });
   const hang = { on: true };
   await hangRequests(page, hang);
-  await page.getByRole('button', { name: 'Continuer avec Alex' }).click();
+  await openAndType(page, 'Alex');
   await page.getByRole('button', { name: 'Réessayer' }).waitFor({ timeout: 30000 });
   hang.on = false; // the stuck requests stay stuck; new ones (after the reload) go through
   await page.getByRole('button', { name: 'Réessayer' }).click();
@@ -279,7 +300,8 @@ check('M. Réessayer reloads the homepage for real and ends up on it, with no in
 
 const browser = await chromium.launch();
 let failed = 0;
-for (const { name, fn } of results) {
+const only = process.env.ONLY; // optional: run just the checks whose name contains this text
+for (const { name, fn } of results.filter((item) => !only || item.name.includes(only))) {
   try { await fn(); console.log(`PASS  ${name}`); }
   catch (error) { failed++; console.log(`FAIL  ${name}\n      ${String(error.message).split('\n').slice(0, 3).join(' | ').slice(0, 400)}`); }
 }

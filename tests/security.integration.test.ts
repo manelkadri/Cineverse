@@ -66,7 +66,7 @@ class Client {
 const run = Date.now();
 const PASSWORD = 'Correct-Horse-Battery-9';
 const user = (tag: string) => ({ name: `Sec ${tag}`, email: `cineverse-e2e-sec-${tag}+${run}@example.com`, password: PASSWORD });
-const profile = (name: string) => ({ name, avatar: 'avatar-1', isKids: false, maturityLevel: 18, preferences: ['Action'], language: 'fr-FR' });
+const profile = (name: string) => ({ name, avatar: 'avatar-1', isKids: false, maturityLevel: 18, preferences: ['Action'], language: 'fr-FR', pin: '7392', confirmPin: '7392' });
 
 describe('CINEVERSE security (isolated database)', { skip: !BASE }, () => {
   const anon = new Client();
@@ -84,6 +84,7 @@ describe('CINEVERSE security (isolated database)', { skip: !BASE }, () => {
     const created = await aliceClient.json('/api/profiles', { method: 'POST', json: profile('AlicePrivate') });
     assert.equal(created.status, 201);
     aliceProfileId = created.body.profile.id;
+    assert.equal((await aliceClient.json(`/api/profiles/${aliceProfileId}/unlock`, { method: 'POST', json: { pin: '7392' } })).status, 200);
     await aliceClient.json(`/api/profiles/${aliceProfileId}/watchlist`, { method: 'POST', json: { mediaId: 'movie:550' } });
     await aliceClient.json(`/api/profiles/${aliceProfileId}/favorites`, { method: 'POST', json: { mediaId: 'tv:1399' } });
   });
@@ -146,7 +147,8 @@ describe('CINEVERSE security (isolated database)', { skip: !BASE }, () => {
     for (const secret of [aliceProfileId, 'AlicePrivate', 'movie:550', 'tv:1399']) assert.equal(blob.includes(secret), false, `Bob's data leaked ${secret}`);
     const id = aliceProfileId;
     const attempts: [string, string, unknown?][] = [
-      ['PATCH', `/api/profiles/${id}`, { name: 'Hacked' }], ['DELETE', `/api/profiles/${id}`],
+      ['PATCH', `/api/profiles/${id}`, { name: 'Hacked', password: PASSWORD }], ['DELETE', `/api/profiles/${id}`, { password: PASSWORD }],
+      ['POST', `/api/profiles/${id}/unlock`, { pin: '7392' }], ['PUT', `/api/profiles/${id}/pin`, { pin: '5038', confirmPin: '5038', password: PASSWORD }],
       ['POST', `/api/profiles/${id}/watchlist`, { mediaId: 'movie:1' }], ['DELETE', `/api/profiles/${id}/watchlist`, { mediaId: 'movie:550' }],
       ['POST', `/api/profiles/${id}/favorites`, { mediaId: 'movie:1' }], ['DELETE', `/api/profiles/${id}/favorites`, { mediaId: 'tv:1399' }],
       ['POST', `/api/profiles/${id}/history`, { mediaId: 'movie:1', positionSeconds: 1, durationSeconds: 9 }],
