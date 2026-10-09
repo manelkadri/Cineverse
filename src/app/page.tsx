@@ -6,13 +6,24 @@ import Footer from '@/components/Footer';
 import ProfileGate from '@/components/ProfileGate';
 import { getHomeSections } from '@/lib/tmdb';
 import type { HomeSections } from '@/lib/tmdb-types';
+import { currentProfileAccess, restrictItemsForProfile } from '@/lib/content-access';
 
 export const dynamic = 'force-dynamic';
 
 export default async function HomePage() {
   let sections: HomeSections = { hero: [], trending: [], popularMovies: [], popularSeries: [], newReleases: [], topRated: [] };
   let error = false;
-  try { sections = await getHomeSections(); } catch { error = true; }
+  try {
+    const [loaded, access] = await Promise.all([getHomeSections(), currentProfileAccess()]);
+    sections = {
+      hero: restrictItemsForProfile(loaded.hero, access),
+      trending: restrictItemsForProfile(loaded.trending, access),
+      popularMovies: restrictItemsForProfile(loaded.popularMovies, access),
+      popularSeries: restrictItemsForProfile(loaded.popularSeries, access),
+      newReleases: restrictItemsForProfile(loaded.newReleases, access),
+      topRated: restrictItemsForProfile(loaded.topRated, access),
+    };
+  } catch { error = true; }
   return (
     <ProfileGate>
       <main className="min-h-screen bg-background">

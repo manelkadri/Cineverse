@@ -6,6 +6,7 @@ import ProfileGate from '@/components/ProfileGate';
 import { getMediaDetails } from '@/lib/tmdb';
 import type { MediaDetails } from '@/lib/tmdb-types';
 import type { MediaType } from '@/lib/profile-types';
+import { currentProfileAccess } from '@/lib/content-access';
 
 export default async function MovieDetailPage({ searchParams }: { searchParams: Promise<{ id?: string; type?: string }> }) {
   const params = await searchParams;
@@ -15,7 +16,11 @@ export default async function MovieDetailPage({ searchParams }: { searchParams: 
   let error = '';
   if (!mediaType || !Number.isInteger(id) || id <= 0) error = 'Ce lien ne contient pas un identifiant TMDB valide.';
   else {
-    try { details = await getMediaDetails(mediaType, id); }
+    try {
+      const [loaded, access] = await Promise.all([getMediaDetails(mediaType, id), currentProfileAccess()]);
+      if (access?.isKids && loaded.maturityLevel > access.maturityLevel) error = 'Ce contenu n’est pas autorisé pour le profil enfant actif.';
+      else details = loaded;
+    }
     catch { error = 'Les informations de ce titre sont momentanément indisponibles.'; }
   }
   return (

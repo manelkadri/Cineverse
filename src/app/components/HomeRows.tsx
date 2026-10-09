@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import MovieRow from '@/components/MovieRow';
 import ContinueWatchingRow from '@/components/ContinueWatchingRow';
 import { useProfiles } from '@/context/ProfileContext';
+import { useTransitionReady } from '@/components/CinematicTransitionProvider';
 import type { ContentItem } from '@/lib/profile-types';
 import type { HomeSections } from '@/lib/tmdb-types';
 
@@ -18,6 +19,7 @@ export default function HomeRows({ sections, error = false }: { sections: HomeSe
   const [profileMedia, setProfileMedia] = useState<ContentItem[]>([]);
   const [recommendations, setRecommendations] = useState<ContentItem[]>([]);
   const [loadingPersonal, setLoadingPersonal] = useState(false);
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const activityIds = useMemo(() => selectedProfile ? Array.from(new Set([...selectedProfile.watchlist, ...selectedProfile.history.map((item) => item.mediaId)])) : [], [selectedProfile]);
 
   useEffect(() => {
@@ -26,10 +28,13 @@ export default function HomeRows({ sections, error = false }: { sections: HomeSe
     setLoadingPersonal(true);
     Promise.all([
       activityIds.length ? fetch('/api/tmdb/media', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: activityIds }), signal: controller.signal }).then((response) => response.ok ? response.json() : { items: [] }) : Promise.resolve({ items: [] }),
-      fetch('/api/recommendations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(selectedProfile), signal: controller.signal }).then((response) => response.ok ? response.json() : { recommendations: [] }),
-    ]).then(([media, recs]) => { setProfileMedia(media.items ?? []); setRecommendations(recs.recommendations ?? []); }).catch(() => undefined).finally(() => setLoadingPersonal(false));
+      fetch('/api/recommendations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profileId: selectedProfile.id }), signal: controller.signal }).then((response) => response.ok ? response.json() : { recommendations: [] }),
+    ]).then(([media, recs]) => { setProfileMedia(media.items ?? []); setRecommendations(recs.recommendations ?? []); }).catch(() => undefined).finally(() => { setLoadingPersonal(false); if (!controller.signal.aborted) setLoadedFor(selectedProfile.id); });
     return () => controller.abort();
   }, [activityIds, selectedProfile]);
+
+  // The cinematic profile intro waits for this: the selected profile's personal data finished loading (even if it failed).
+  useTransitionReady(selectedProfile ? `home:${selectedProfile.id}` : null, Boolean(selectedProfile) && loadedFor === selectedProfile?.id);
 
   if (!selectedProfile) return null;
   const allowed = (items: ContentItem[]) => items.filter((item) => item.maturityLevel <= selectedProfile.maturityLevel);

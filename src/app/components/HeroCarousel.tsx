@@ -34,12 +34,16 @@ export default function HeroCarousel({ items, error = false }: { items: ContentI
   }
 
   const inList = selectedProfile?.watchlist.includes(item.id) ?? false;
+  // The next slide is kept mounted (hidden, keyed by id) so its backdrop is already loaded when the carousel advances.
+  const upcoming = visibleItems.length > 1 ? visibleItems[(current + 1) % visibleItems.length] : undefined;
+  const slides = upcoming && upcoming.id !== item.id ? [item, upcoming] : [item];
   return (
-    <section className="relative h-[85vh] min-h-[560px] max-h-[900px] w-full overflow-hidden">
-      <div className={`absolute inset-0 transition-opacity duration-700 ${transitioning ? 'opacity-0' : 'opacity-100'}`}><AppImage src={item.backdropPath} alt={`Scène de ${item.title}`} fill priority sizes="100vw" className="object-cover object-center" /></div>
+    <section className="relative min-h-[max(560px,min(85vh,900px))] w-full overflow-hidden">
+      <div className={`absolute inset-0 transition-opacity duration-700 ${transitioning ? 'opacity-0' : 'opacity-100'}`}>{slides.map((slide, index) => <div key={slide.id} className={`absolute inset-0 ${index === 0 ? '' : 'pointer-events-none opacity-0'}`} aria-hidden={index !== 0}><AppImage src={slide.backdropPath} alt={index === 0 ? `Scène de ${slide.title}` : ''} fill priority={index === 0 && current === 0} fetchPriority={index === 0 ? 'high' : 'low'} sizes="100vw" className="object-cover object-center" /></div>)}</div>
       <div className="absolute inset-0 hero-gradient" /><div className="absolute inset-x-0 bottom-0 h-48 hero-gradient-bottom" /><div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-black/30" />
-      <div className={`absolute inset-0 flex items-center transition-all duration-500 ${transitioning ? 'translate-y-2 opacity-0' : 'translate-y-0 opacity-100'}`}>
-        <div className="mx-auto w-full max-w-screen-2xl px-4 pt-16 lg:px-8 xl:px-10">
+      <div className={`relative flex min-h-[inherit] items-center transition-all duration-500 ${transitioning ? 'translate-y-2 opacity-0' : 'translate-y-0 opacity-100'}`}>
+        {/* 152px top and 88px bottom keep the text where it always sat (centred 32px below the middle) while reserving room for the rows that overlap the hero by 64px; the hero grows instead of letting them collide */}
+        <div className="mx-auto w-full max-w-screen-2xl px-4 pb-[88px] pt-[152px] lg:px-8 xl:px-10">
           <div className="max-w-xl">
             <div className="mb-3 flex items-center gap-2"><span className="rounded border border-primary px-2 py-0.5 text-xs font-bold text-primary">TMDB</span><span className="text-xs font-semibold uppercase tracking-widest text-white/70">{item.mediaType === 'movie' ? 'Film' : 'Série'}</span></div>
             <h1 className="text-hero-title mb-4 text-white drop-shadow-2xl">{item.title}</h1>

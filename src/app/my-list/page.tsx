@@ -32,7 +32,7 @@ function MyListContent() {
     setLoading(true); setError(false);
     Promise.all([
       ids.length ? fetch('/api/tmdb/media', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }), signal: controller.signal }).then((response) => { if (!response.ok) throw new Error(); return response.json(); }) : Promise.resolve({ items: [] }),
-      fetch('/api/recommendations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(selectedProfile), signal: controller.signal }).then((response) => response.ok ? response.json() : { recommendations: [] }),
+      fetch('/api/recommendations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profileId: selectedProfile.id }), signal: controller.signal }).then((response) => response.ok ? response.json() : { recommendations: [] }),
     ]).then(([media, recs]) => { setItems(media.items ?? []); setRecommendations(recs.recommendations ?? []); }).catch((requestError) => { if (requestError.name !== 'AbortError') setError(true); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [ids, retry, selectedProfile]);

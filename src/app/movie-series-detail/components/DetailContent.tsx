@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Building2, Check, ChevronLeft, Clock, Film, Globe, Info, Play, Plus, Star, UserRound, X } from 'lucide-react';
 import AppImage from '@/components/ui/AppImage';
@@ -18,6 +18,17 @@ export default function DetailContent({ details, error }: { details: MediaDetail
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]['id']>('about');
   const [trailer, setTrailer] = useState<TrailerVideo | null>(null);
   const [playbackNotice, setPlaybackNotice] = useState(false);
+  const modalOpen = Boolean(trailer) || playbackNotice;
+  useEffect(() => {
+    if (!modalOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setTrailer(null);
+      setPlaybackNotice(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [modalOpen]);
   const availableTabs = useMemo(() => tabs.filter((tab) => tab.id !== 'seasons' || Boolean(details?.seasons.length)), [details?.seasons.length]);
 
   if (!details) {
