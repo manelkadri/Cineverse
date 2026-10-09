@@ -55,9 +55,18 @@ export const authOptions: NextAuthOptions = {
     async session({ session, token }) {
       const sid = typeof token.sid === 'string' ? token.sid : '';
       const userId = String(token.userId ?? token.sub ?? '');
-      const active = sid && userId
-        ? await prisma.session.findFirst({ where: { sessionToken: sid, userId, expires: { gt: new Date() } }, select: { id: true } })
-        : null;
+      let active: { id: string } | null = null;
+      if (sid && userId) {
+        try {
+          active = await prisma.session.findFirst({ where: { sessionToken: sid, userId, expires: { gt: new Date() } }, select: { id: true } });
+        } catch (error) {
+          // The database could not be asked, which says nothing about the session. Throwing here (or answering "no session") makes
+          // NextAuth DELETE the member's cookie, so a database hiccup would sign everyone out. The session is reported without a user:
+          // server code finds no user id (fail closed, see lib/server-auth.ts), the cookie is kept, and the page shows a database error.
+          console.error(`[auth] session check failed (${(error as { code?: string }).code ?? (error as Error).name ?? 'unexpected error'})`);
+          return { expires: session.expires, databaseUnavailable: true } as unknown as Session;
+        }
+      }
       // An empty object makes NextAuth report "no session" (null) to getServerSession and /api/auth/session.
       if (!active) return {} as Session;
       if (session.user) session.user.id = userId;
