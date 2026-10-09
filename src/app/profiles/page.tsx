@@ -1,26 +1,33 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, LockKeyhole, Pencil, Plus, ShieldCheck, Trash2, X } from 'lucide-react';
 import ProfileAvatar, { AVATAR_OPTIONS } from '@/components/ProfileAvatar';
 import { useProfiles } from '@/context/ProfileContext';
 import type { CineverseProfile, ProfileDraft } from '@/lib/profile-types';
+import CineverseLogo from '@/components/CineverseLogo';
+import { useCinematicTransition } from '@/components/CinematicTransitionProvider';
 
 const GENRES = ['Action', 'Animation', 'Aventure', 'Crime', 'Drame', 'Famille', 'Fantastique', 'Mystère', 'Science-fiction', 'Thriller'];
 
 const EMPTY_DRAFT: ProfileDraft = {
-  name: '', avatar: 'ember', isKids: false, maturityLevel: 18, preferences: [], parentalPin: '',
+  name: '', avatar: 'ember', isKids: false, maturityLevel: 18, preferences: [], language: 'fr-FR', parentalPin: '',
 };
 
 export default function ProfilesPage() {
   const router = useRouter();
-  const { profiles, ready, persistenceMode, selectProfile, createProfile, updateProfile, deleteProfile } = useProfiles();
+  const { begin: beginCinematicTransition } = useCinematicTransition();
+  const choosing = useRef(false);
+  const [choosingId, setChoosingId] = useState<string | null>(null);
+  const { profiles, ready, persistenceMode, error: persistenceError, selectProfile, createProfile, updateProfile, deleteProfile } = useProfiles();
   const [managing, setManaging] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingProfile, setEditingProfile] = useState<CineverseProfile | null>(null);
   const [draft, setDraft] = useState<ProfileDraft>(EMPTY_DRAFT);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     document.body.style.overflow = editorOpen ? 'hidden' : '';
@@ -36,23 +43,39 @@ export default function ProfilesPage() {
 
   const openEdit = (profile: CineverseProfile) => {
     setEditingProfile(profile);
-    setDraft({ name: profile.name, avatar: profile.avatar, isKids: profile.isKids, maturityLevel: profile.maturityLevel, preferences: [...profile.preferences], parentalPin: '' });
+    setDraft({ name: profile.name, avatar: profile.avatar, isKids: profile.isKids, maturityLevel: profile.maturityLevel, preferences: [...profile.preferences], language: profile.language, parentalPin: '' });
     setConfirmDelete(false);
     setEditorOpen(true);
   };
 
-  const chooseProfile = (profile: CineverseProfile) => {
+  const chooseProfile = async (profile: CineverseProfile) => {
     if (managing) return openEdit(profile);
-    selectProfile(profile.id);
-    router.push('/');
+    if (choosing.current) return; // no double selection while the request is in flight
+    choosing.current = true;
+    setChoosingId(profile.id);
+    setActionError(null);
+    try {
+      await selectProfile(profile.id);
+      // Only a confirmed selection starts the cinematic intro; it navigates to the homepage and waits for it to be ready.
+      beginCinematicTransition(`home:${profile.id}`, '/');
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Sélection impossible.');
+    } finally {
+      choosing.current = false;
+      setChoosingId(null);
+    }
   };
 
-  const saveProfile = (event: React.FormEvent) => {
+  const saveProfile = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!draft.name.trim()) return;
-    if (editingProfile) updateProfile(editingProfile.id, draft);
-    else createProfile(draft);
-    setEditorOpen(false);
+    setSubmitting(true); setActionError(null);
+    try {
+      if (editingProfile) await updateProfile(editingProfile.id, draft);
+      else await createProfile(draft);
+      setEditorOpen(false);
+    } catch (error) { setActionError(error instanceof Error ? error.message : 'Enregistrement impossible.'); }
+    finally { setSubmitting(false); }
   };
 
   const togglePreference = (genre: string) => {
@@ -68,7 +91,7 @@ export default function ProfilesPage() {
     return (
       <main className="grid min-h-screen place-items-center bg-[#050608]">
         <div className="text-center">
-          <div className="font-display text-3xl"><span className="text-primary">CINE</span>VERSE</div>
+          <CineverseLogo as="div" className="text-[36px]" />
           <div className="mx-auto mt-5 size-7 animate-spin rounded-full border-2 border-white/15 border-t-primary" />
         </div>
       </main>
@@ -79,11 +102,11 @@ export default function ProfilesPage() {
     <main className="relative flex min-h-screen flex-col overflow-hidden bg-[#050608] text-white">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_-10%,rgba(229,9,20,0.13),transparent_38%)]" />
       <header className="relative flex h-20 items-center justify-between px-5 sm:px-8 lg:px-12">
-        <button type="button" onClick={() => router.push('/')} className="font-display text-2xl leading-none" aria-label="Accueil CINEVERSE">
-          <span className="text-primary">CINE</span><span>VERSE</span>
+        <button type="button" onClick={() => router.push('/')} className="leading-none" aria-label="Accueil CINEVERSE">
+          <CineverseLogo className="text-[29px]" />
         </button>
-        <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${persistenceMode === 'database' ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300' : 'border-white/10 bg-white/5 text-muted-foreground'}`}>
-          {persistenceMode === 'database' ? 'Synchronisé' : 'Mode local'}
+        <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${persistenceMode === 'database' ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300' : 'border-amber-400/20 bg-amber-400/[0.08] text-amber-200'}`}>
+          {persistenceMode === 'database' ? 'Synchronisé' : 'Base indisponible'}
         </span>
       </header>
 
@@ -93,6 +116,7 @@ export default function ProfilesPage() {
           <p className="mx-auto mt-3 max-w-lg text-sm text-muted-foreground sm:text-base">
             Choisissez votre profil pour retrouver votre sélection et reprendre vos programmes.
           </p>
+          {(actionError || persistenceError) && <div role="alert" className="mx-auto mt-5 max-w-lg rounded-lg border border-red-500/25 bg-red-500/10 p-3 text-sm text-red-100">{actionError || persistenceError}</div>}
 
           <div className="mx-auto mt-10 flex max-w-4xl flex-wrap justify-center gap-x-6 gap-y-8 sm:mt-12 sm:gap-x-8">
             {profiles.map((profile) => (
@@ -100,7 +124,9 @@ export default function ProfilesPage() {
                 key={profile.id}
                 type="button"
                 onClick={() => chooseProfile(profile)}
-                className="group w-[126px] sm:w-[150px]"
+                disabled={choosingId !== null}
+                aria-busy={choosingId === profile.id || undefined}
+                className="group w-[126px] disabled:cursor-wait sm:w-[150px]"
                 aria-label={managing ? `Modifier le profil ${profile.name}` : `Continuer avec ${profile.name}`}
               >
                 <span className="relative block aspect-square overflow-hidden rounded-2xl border-2 border-transparent shadow-[0_18px_45px_rgba(0,0,0,0.35)] transition-all duration-300 group-hover:-translate-y-1 group-hover:border-white group-hover:shadow-[0_22px_60px_rgba(0,0,0,0.55)]">
@@ -194,7 +220,7 @@ export default function ProfilesPage() {
                       </select>
                     </label>
                     <label className="text-xs font-semibold text-[#c8c8cc]">Code parental
-                      <div className="relative mt-2"><LockKeyhole size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><input inputMode="numeric" maxLength={4} value={draft.parentalPin} onChange={(event) => setDraft((current) => ({ ...current, parentalPin: event.target.value.replace(/\D/g, '') }))} placeholder={editingProfile ? 'Inchangé' : '4 chiffres'} className="search-input py-2.5 pl-9" /></div>
+                      <div className="relative mt-2"><LockKeyhole size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><input inputMode="numeric" maxLength={4} required value={draft.parentalPin} onChange={(event) => setDraft((current) => ({ ...current, parentalPin: event.target.value.replace(/\D/g, '') }))} placeholder={editingProfile ? 'Code actuel' : '4 chiffres'} className="search-input py-2.5 pl-9" /></div>
                     </label>
                   </div>
                 )}
@@ -215,18 +241,19 @@ export default function ProfilesPage() {
                   {confirmDelete ? (
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-500/25 bg-red-500/10 p-3">
                       <p className="text-xs text-red-100">Supprimer ce profil et toutes ses données&nbsp;?</p>
-                      <div className="flex gap-2"><button type="button" onClick={() => setConfirmDelete(false)} className="rounded-md px-3 py-1.5 text-xs font-bold text-white/70 hover:bg-white/10">Annuler</button><button type="button" onClick={() => { deleteProfile(editingProfile.id); setEditorOpen(false); }} className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-bold">Supprimer</button></div>
+                      <div className="flex gap-2"><button type="button" onClick={() => setConfirmDelete(false)} className="rounded-md px-3 py-1.5 text-xs font-bold text-white/70 hover:bg-white/10">Annuler</button><button type="button" disabled={submitting} onClick={async () => { setSubmitting(true); setActionError(null); try { await deleteProfile(editingProfile.id, draft.parentalPin); setEditorOpen(false); } catch (error) { setActionError(error instanceof Error ? error.message : 'Suppression impossible.'); setConfirmDelete(false); } finally { setSubmitting(false); } }} className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-bold disabled:opacity-50">Supprimer</button></div>
                     </div>
                   ) : (
                     <button type="button" onClick={() => setConfirmDelete(true)} className="inline-flex items-center gap-2 text-sm font-semibold text-red-400 hover:text-red-300"><Trash2 size={16} /> Supprimer le profil</button>
                   )}
                 </div>
               )}
+              {actionError && <div role="alert" className="rounded-lg border border-red-500/25 bg-red-500/10 p-3 text-sm text-red-100">{actionError}</div>}
             </div>
 
             <div className="flex justify-end gap-3 border-t border-white/10 px-5 py-4 sm:px-6">
               <button type="button" onClick={() => setEditorOpen(false)} className="rounded-lg px-4 py-2 text-sm font-bold text-muted-foreground hover:bg-white/5 hover:text-white">Annuler</button>
-              <button type="submit" disabled={!draft.name.trim()} className="rounded-lg bg-primary px-5 py-2 text-sm font-bold text-white transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-40">Enregistrer</button>
+              <button type="submit" disabled={!draft.name.trim() || submitting} className="rounded-lg bg-primary px-5 py-2 text-sm font-bold text-white transition-colors hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-40">{submitting ? 'Enregistrement…' : 'Enregistrer'}</button>
             </div>
           </form>
         </div>

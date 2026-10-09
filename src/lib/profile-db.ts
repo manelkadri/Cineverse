@@ -6,6 +6,8 @@ export const profileInclude = {
   watchlist: { orderBy: { addedAt: 'asc' as const } },
   favorites: { orderBy: { addedAt: 'asc' as const } },
   viewingHistory: { orderBy: { lastWatchedAt: 'desc' as const } },
+  watchProgress: { orderBy: { updatedAt: 'desc' as const } },
+  preferenceDetails: true,
 } satisfies Prisma.ProfileInclude;
 
 export type DatabaseProfile = Prisma.ProfileGetPayload<{ include: typeof profileInclude }>;
@@ -18,22 +20,20 @@ export function toClientProfile(profile: DatabaseProfile): CineverseProfile {
     isKids: profile.isKids,
     maturityLevel: profile.maturityLevel,
     preferences: profile.preferences,
+    language: profile.language,
     watchlist: profile.watchlist.map((item) => item.mediaId),
     favorites: profile.favorites.map((item) => item.mediaId),
-    history: profile.viewingHistory.map((item) => ({
+    history: (profile.watchProgress.length ? profile.watchProgress : profile.viewingHistory).map((item) => ({
       mediaId: item.mediaId,
       positionSeconds: item.positionSeconds,
       durationSeconds: item.durationSeconds,
-      updatedAt: item.lastWatchedAt.toISOString(),
+      updatedAt: ('updatedAt' in item ? item.updatedAt : item.lastWatchedAt).toISOString(),
     })),
   };
 }
 
-export function mediaTypeFor(mediaId: string) {
-  return parseMediaId(mediaId)?.mediaType ?? 'movie';
-}
-
-export function getProviderUserId(request: Request) {
-  const value = request.headers.get('x-cineverse-user-id')?.trim();
-  return value || null;
+export function mediaDataFor(mediaId: string) {
+  const parsed = parseMediaId(mediaId);
+  if (!parsed) throw new Error('Invalid media ID');
+  return { tmdbId: parsed.tmdbId, mediaType: parsed.mediaType };
 }

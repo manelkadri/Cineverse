@@ -14,6 +14,7 @@ export interface CineverseProfile {
   isKids: boolean;
   maturityLevel: number;
   preferences: string[];
+  language: string;
   watchlist: string[];
   favorites: string[];
   history: ViewingProgress[];
@@ -25,6 +26,7 @@ export interface ProfileDraft {
   isKids: boolean;
   maturityLevel: number;
   preferences: string[];
+  language?: string;
   parentalPin?: string;
 }
 

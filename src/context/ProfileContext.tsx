@@ -1,198 +1,147 @@
 'use client';
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { DEFAULT_PROFILES } from '@/lib/default-profiles';
+import { useSession } from 'next-auth/react';
 import type { CineverseProfile, ProfileDraft } from '@/lib/profile-types';
-
-const STORAGE_KEY = 'cineverse.profile-state.v4';
-const SELECTED_KEY = 'cineverse.selected-profile.v4';
 
 interface ProfileContextValue {
   profiles: CineverseProfile[];
   selectedProfile: CineverseProfile | null;
   selectedProfileId: string | null;
   ready: boolean;
-  persistenceMode: 'database' | 'local';
-  selectProfile: (id: string | null) => void;
-  createProfile: (draft: ProfileDraft) => CineverseProfile;
-  updateProfile: (id: string, draft: ProfileDraft) => void;
-  deleteProfile: (id: string) => void;
-  toggleWatchlist: (mediaId: string) => void;
-  toggleFavorite: (mediaId: string) => void;
-  updateProgress: (mediaId: string, positionSeconds: number, durationSeconds: number) => void;
+  persistenceMode: 'database' | 'unavailable';
+  error: string | null;
+  selectProfile: (id: string | null) => Promise<void>;
+  createProfile: (draft: ProfileDraft) => Promise<CineverseProfile>;
+  updateProfile: (id: string, draft: ProfileDraft) => Promise<void>;
+  deleteProfile: (id: string, parentalPin?: string) => Promise<void>;
+  toggleWatchlist: (mediaId: string) => Promise<void>;
+  toggleFavorite: (mediaId: string) => Promise<void>;
+  updateProgress: (mediaId: string, positionSeconds: number, durationSeconds: number, seasonNumber?: number, episodeNumber?: number) => Promise<void>;
 }
 
 const ProfileContext = createContext<ProfileContextValue | null>(null);
 
-function cloneDefaults() {
-  return DEFAULT_PROFILES.map((profile) => ({
-    ...profile,
-    preferences: [...profile.preferences],
-    watchlist: [...profile.watchlist],
-    favorites: [...profile.favorites],
-    history: profile.history.map((item) => ({ ...item })),
-  }));
+async function responseJson<T>(response: Response): Promise<T> {
+  const payload = await response.json().catch(() => ({})) as T & { error?: string };
+  if (!response.ok) throw new Error(payload.error || 'La synchronisation a échoué.');
+  return payload;
 }
 
 export function ProfileProvider({ children }: { children: React.ReactNode }) {
-  const [profiles, setProfiles] = useState<CineverseProfile[]>(cloneDefaults);
+  const { status } = useSession();
+  const [profiles, setProfiles] = useState<CineverseProfile[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
-  const [persistenceMode, setPersistenceMode] = useState<'database' | 'local'>('local');
+  const [persistenceMode, setPersistenceMode] = useState<'database' | 'unavailable'>('unavailable');
+  const [error, setError] = useState<string | null>(null);
+
+  const hydrateProfiles = useCallback(async () => {
+    if (status !== 'authenticated') return;
+    try {
+      const response = await fetch('/api/profiles', { cache: 'no-store' });
+      const payload = await responseJson<{ profiles: CineverseProfile[]; selectedProfileId?: string | null }>(response);
+      setProfiles(payload.profiles);
+      setSelectedProfileId(payload.selectedProfileId ?? null);
+      setPersistenceMode('database');
+      setError(null);
+    } catch (requestError) {
+      setProfiles([]);
+      setSelectedProfileId(null);
+      setPersistenceMode('unavailable');
+      setError(requestError instanceof Error ? requestError.message : 'Base de données indisponible.');
+    } finally {
+      setReady(true);
+    }
+  }, [status]);
 
   useEffect(() => {
-    let cancelled = false;
-    const hydrate = async () => {
-      const storedProfiles = window.localStorage.getItem(STORAGE_KEY);
-      const storedSelected = window.localStorage.getItem(SELECTED_KEY);
-      if (storedProfiles) {
-        try {
-          setProfiles(JSON.parse(storedProfiles) as CineverseProfile[]);
-        } catch {
-          setProfiles(cloneDefaults());
-        }
-      }
-      if (storedSelected) setSelectedProfileId(storedSelected);
+    if (status === 'loading') return;
+    if (status === 'unauthenticated') {
+      setProfiles([]);
+      setSelectedProfileId(null);
+      setPersistenceMode('unavailable');
+      setReady(true);
+      return;
+    }
+    setReady(false);
+    void hydrateProfiles();
+  }, [hydrateProfiles, status]);
 
-      try {
-        const response = await fetch('/api/profiles', { cache: 'no-store' });
-        if (response.ok) {
-          const payload = (await response.json()) as { profiles: CineverseProfile[]; selectedProfileId?: string | null };
-          if (!cancelled) {
-            setProfiles(payload.profiles);
-            setSelectedProfileId(payload.selectedProfileId ?? null);
-            setPersistenceMode('database');
-          }
-        }
-      } catch {
-        // Local persistence remains active when PostgreSQL is not configured.
-      } finally {
-        if (!cancelled) setReady(true);
-      }
-    };
-    hydrate();
-    return () => { cancelled = true; };
+  const selectProfile = useCallback(async (id: string | null) => {
+    const previous = selectedProfileId;
+    setSelectedProfileId(id);
+    try {
+      await responseJson(await fetch('/api/profiles/selected', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profileId: id }) }));
+      setError(null);
+    } catch (requestError) {
+      setSelectedProfileId(previous);
+      setError(requestError instanceof Error ? requestError.message : 'Sélection impossible.');
+      throw requestError;
+    }
+  }, [selectedProfileId]);
+
+  const createProfile = useCallback(async (draft: ProfileDraft) => {
+    const payload = await responseJson<{ profile: CineverseProfile }>(await fetch('/api/profiles', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...draft, language: 'fr-FR' }),
+    }));
+    setProfiles((current) => [...current, payload.profile]);
+    setError(null);
+    return payload.profile;
   }, []);
 
-  useEffect(() => {
-    if (!ready) return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles));
-  }, [profiles, ready]);
-
-  useEffect(() => {
-    if (!ready) return;
-    if (selectedProfileId) window.localStorage.setItem(SELECTED_KEY, selectedProfileId);
-    else window.localStorage.removeItem(SELECTED_KEY);
-  }, [selectedProfileId, ready]);
-
-  const syncProfile = useCallback(async (profile: CineverseProfile, parentalPin?: string) => {
-    if (persistenceMode !== 'database') return;
-    try {
-      await fetch('/api/profiles', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...profile, parentalPin }),
-      });
-    } catch {
-      // The optimistic local state remains available during a transient backend failure.
-    }
-  }, [persistenceMode]);
-
-  const selectProfile = useCallback((id: string | null) => {
-    setSelectedProfileId(id);
-    if (persistenceMode === 'database') {
-      fetch('/api/profiles/selected', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ profileId: id }),
-      }).catch(() => undefined);
-    }
-  }, [persistenceMode]);
-
-  const createProfile = useCallback((draft: ProfileDraft) => {
-    const profile: CineverseProfile = {
-      id: `profile-${crypto.randomUUID()}`,
-      name: draft.name.trim(),
-      avatar: draft.avatar,
-      isKids: draft.isKids,
-      maturityLevel: draft.isKids ? Math.min(draft.maturityLevel, 10) : draft.maturityLevel,
-      preferences: draft.preferences,
-      watchlist: [],
-      favorites: [],
-      history: [],
-    };
-    setProfiles((current) => [...current, profile]);
-    void syncProfile(profile, draft.parentalPin);
-    return profile;
-  }, [syncProfile]);
-
-  const updateProfile = useCallback((id: string, draft: ProfileDraft) => {
-    setProfiles((current) => current.map((profile) => {
-      if (profile.id !== id) return profile;
-      const updated = {
-        ...profile,
-        name: draft.name.trim(),
-        avatar: draft.avatar,
-        isKids: draft.isKids,
-        maturityLevel: draft.isKids ? Math.min(draft.maturityLevel, 10) : draft.maturityLevel,
-        preferences: draft.preferences,
-      };
-      void syncProfile(updated, draft.parentalPin);
-      return updated;
+  const updateProfile = useCallback(async (id: string, draft: ProfileDraft) => {
+    const payload = await responseJson<{ profile: CineverseProfile }>(await fetch(`/api/profiles/${encodeURIComponent(id)}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...draft, language: 'fr-FR' }),
     }));
-  }, [syncProfile]);
+    setProfiles((current) => current.map((profile) => profile.id === id ? payload.profile : profile));
+    setError(null);
+  }, []);
 
-  const deleteProfile = useCallback((id: string) => {
+  const deleteProfile = useCallback(async (id: string, parentalPin?: string) => {
+    await responseJson(await fetch(`/api/profiles/${encodeURIComponent(id)}`, {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ parentalPin }),
+    }));
     setProfiles((current) => current.filter((profile) => profile.id !== id));
     if (selectedProfileId === id) setSelectedProfileId(null);
-    if (persistenceMode === 'database') {
-      fetch(`/api/profiles/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => undefined);
+    setError(null);
+  }, [selectedProfileId]);
+
+  const updateCollection = useCallback(async (collection: 'watchlist' | 'favorites', mediaId: string) => {
+    const profile = profiles.find((item) => item.id === selectedProfileId);
+    if (!profile) return;
+    const current = profile[collection];
+    const removing = current.includes(mediaId);
+    setProfiles((items) => items.map((item) => item.id === profile.id ? { ...item, [collection]: removing ? current.filter((id) => id !== mediaId) : [...current, mediaId] } : item));
+    try {
+      await responseJson(await fetch(`/api/profiles/${encodeURIComponent(profile.id)}/${collection}`, {
+        method: removing ? 'DELETE' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mediaId }),
+      }));
+      setError(null);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Synchronisation impossible.');
+      await hydrateProfiles();
+      throw requestError;
     }
-  }, [persistenceMode, selectedProfileId]);
+  }, [hydrateProfiles, profiles, selectedProfileId]);
 
-  const updateSelected = useCallback((updater: (profile: CineverseProfile) => CineverseProfile) => {
+  const toggleWatchlist = useCallback((mediaId: string) => updateCollection('watchlist', mediaId), [updateCollection]);
+  const toggleFavorite = useCallback((mediaId: string) => updateCollection('favorites', mediaId), [updateCollection]);
+
+  const updateProgress = useCallback(async (mediaId: string, positionSeconds: number, durationSeconds: number, seasonNumber?: number, episodeNumber?: number) => {
     if (!selectedProfileId) return;
-    setProfiles((current) => current.map((profile) => {
-      if (profile.id !== selectedProfileId) return profile;
-      const updated = updater(profile);
-      void syncProfile(updated);
-      return updated;
+    const payload = { mediaId, positionSeconds, durationSeconds, seasonNumber: seasonNumber ?? null, episodeNumber: episodeNumber ?? null };
+    await responseJson(await fetch(`/api/profiles/${encodeURIComponent(selectedProfileId)}/history`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
     }));
-  }, [selectedProfileId, syncProfile]);
-
-  const toggleWatchlist = useCallback((mediaId: string) => {
-    updateSelected((profile) => ({
-      ...profile,
-      watchlist: profile.watchlist.includes(mediaId)
-        ? profile.watchlist.filter((id) => id !== mediaId)
-        : [...profile.watchlist, mediaId],
-    }));
-  }, [updateSelected]);
-
-  const toggleFavorite = useCallback((mediaId: string) => {
-    updateSelected((profile) => ({
-      ...profile,
-      favorites: profile.favorites.includes(mediaId)
-        ? profile.favorites.filter((id) => id !== mediaId)
-        : [...profile.favorites, mediaId],
-    }));
-  }, [updateSelected]);
-
-  const updateProgress = useCallback((mediaId: string, positionSeconds: number, durationSeconds: number) => {
-    updateSelected((profile) => ({
-      ...profile,
-      history: [
-        { mediaId, positionSeconds, durationSeconds, updatedAt: new Date().toISOString() },
-        ...profile.history.filter((item) => item.mediaId !== mediaId),
-      ],
-    }));
-  }, [updateSelected]);
+    await hydrateProfiles();
+  }, [hydrateProfiles, selectedProfileId]);
 
   const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId) ?? null;
   const value = useMemo(() => ({
-    profiles, selectedProfile, selectedProfileId, ready, persistenceMode, selectProfile,
+    profiles, selectedProfile, selectedProfileId, ready, persistenceMode, error, selectProfile,
     createProfile, updateProfile, deleteProfile, toggleWatchlist, toggleFavorite, updateProgress,
-  }), [profiles, selectedProfile, selectedProfileId, ready, persistenceMode, selectProfile, createProfile, updateProfile, deleteProfile, toggleWatchlist, toggleFavorite, updateProgress]);
+  }), [profiles, selectedProfile, selectedProfileId, ready, persistenceMode, error, selectProfile, createProfile, updateProfile, deleteProfile, toggleWatchlist, toggleFavorite, updateProgress]);
 
   return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;
 }
