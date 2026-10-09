@@ -450,6 +450,106 @@
   100% { opacity: 0; transform: translateX(500%); }
 }
 
+/* ==========================================================================
+   Profile PIN screen (src/app/profiles/[id]/unlock): poster wall + vignette + glow reuse the loading-screen layers
+   ========================================================================== */
+.cv-pin-screen {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: hidden;
+  background: #050508;
+  color: #fff;
+}
+.cv-pin-screen__center {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  min-height: inherit;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(1.25rem, 4vh, 2.25rem);
+  padding: 2rem 1rem;
+}
+/* red light under the wordmark */
+.cv-pin-logo { position: relative; font-size: clamp(2.2rem, 7vw, 3.4rem); letter-spacing: 0.03em; text-shadow: 0 0.04em 0.12em rgba(0, 0, 0, 0.55); }
+.cv-pin-logo::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 150%;
+  height: 0.7em;
+  transform: translate(-50%, -30%);
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(229, 9, 20, 0.5) 0%, rgba(229, 9, 20, 0.14) 45%, transparent 72%);
+  filter: blur(6px);
+}
+.cv-pin-card {
+  width: min(100%, 26rem);
+  padding: clamp(1.5rem, 5vw, 2.25rem) clamp(1.25rem, 5vw, 2rem);
+  text-align: center;
+  border-radius: 1.25rem;
+  border: 1px solid rgba(229, 9, 20, 0.3);
+  background: rgba(10, 10, 14, 0.78);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 24px 70px rgba(0, 0, 0, 0.65), 0 0 70px rgba(229, 9, 20, 0.14);
+}
+.cv-pin-avatar {
+  width: 5.25rem;
+  height: 5.25rem;
+  margin: 0 auto;
+  overflow: hidden;
+  border-radius: 999px;
+  border: 2px solid #e50914;
+  box-shadow: 0 0 0 4px rgba(229, 9, 20, 0.12), 0 0 26px rgba(229, 9, 20, 0.55);
+}
+
+.cv-pin { position: relative; display: flex; justify-content: center; gap: clamp(0.5rem, 2.6vw, 0.8rem); }
+.cv-pin__box {
+  display: grid;
+  place-items: center;
+  width: clamp(3rem, 15vw, 4rem);
+  aspect-ratio: 1 / 1;
+  border-radius: 0.8rem;
+  border: 1.5px solid rgba(229, 9, 20, 0.42);
+  background: #0a0a0e;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+.cv-pin__box--active { border-color: #e50914; box-shadow: 0 0 0 3px rgba(229, 9, 20, 0.18), 0 0 22px rgba(229, 9, 20, 0.45); }
+.cv-pin--invalid .cv-pin__box { border-color: #ff2d3a; }
+.cv-pin__dot { width: 0.85rem; height: 0.85rem; border-radius: 999px; background: #e50914; box-shadow: 0 0 12px rgba(229, 9, 20, 0.85); }
+/* the real input covers the boxes invisibly; 16px+ font avoids iOS zoom-on-focus */
+.cv-pin__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  font-size: 16px;
+  cursor: text;
+  caret-color: transparent;
+}
+.cv-pin--shake { animation: cv-pin-shake 420ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both; }
+@keyframes cv-pin-shake {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(3px); }
+  30%, 50%, 70% { transform: translateX(-6px); }
+  40%, 60% { transform: translateX(6px); }
+}
+.cv-pin-spinner { width: 1.1rem; height: 1.1rem; border-radius: 999px; border: 2px solid rgba(255, 255, 255, 0.18); border-top-color: #e50914; animation: cv-pin-spin 700ms linear infinite; }
+@keyframes cv-pin-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .cv-pin--shake { animation: none; }
+  .cv-pin-spinner { animation-duration: 2.4s; }
+  .cv-pin__box { transition: none; }
+}
+
 /* route content eases in over the loading screen instead of snapping; ends with no lingering stacking context */
 main { animation: cv-page-in 220ms ease-out backwards; }
 @keyframes cv-page-in { from { opacity: 0.35; } to { opacity: 1; } }

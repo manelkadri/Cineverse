@@ -20,7 +20,7 @@ export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { profiles, selectedProfile, selectProfile } = useProfiles();
+  const { profiles, selectedProfile, clearSelectedProfile } = useProfiles();
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -59,15 +59,16 @@ export default function Navbar() {
     return false;
   };
 
+  // Switching profiles always goes through the PIN screen of the target profile.
   const switchProfile = (id: string) => {
-    selectProfile(id);
     setProfileMenuOpen(false);
-    router.push('/');
+    if (id === selectedProfile?.id) return;
+    router.push(`/profiles/${encodeURIComponent(id)}/unlock`);
   };
 
-  const exitProfile = () => {
-    selectProfile(null);
+  const exitProfile = async () => {
     setProfileMenuOpen(false);
+    try { await clearSelectedProfile(); } catch { /* the picker below still requires a PIN for every profile */ }
     router.push('/profiles');
   };
 
