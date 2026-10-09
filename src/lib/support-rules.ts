@@ -80,3 +80,6 @@ export async function adminStatus(read: () => Promise<{ isSupportAdmin: boolean 
     return 'unavailable';
   }
 }
+
+/** The short reference shown to the author of a ticket and to staff, derived from the ticket id. */
+export const ticketReference = (id: string) => `CV-${id.slice(-8).toUpperCase()}`;

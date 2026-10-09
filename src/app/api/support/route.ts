@@ -5,8 +5,11 @@ import { authSecret, isAuthRuntimeConfigured } from '@/lib/auth-security';
 import { authenticatedContext } from '@/lib/server-auth';
 import { crossSiteResponse } from '@/lib/account-api';
 import { ticketReference } from '@/lib/support-admin';
+import { loadCategories, notifyAdmins } from '@/lib/support-server';
 import { SENSITIVE_CONTENT_MESSAGE, SUPPORT_LIMITS, containsSensitiveContent, countLinks } from '@/lib/support-rules';
 import { supportRequestSchema } from '@/lib/validation';
+import { notify } from '@/lib/notifications';
+import { adminTicketNew, ticketCreated } from '@/lib/notification-events';
 
 export const runtime = 'nodejs';
 
@@ -37,6 +40,9 @@ export async function POST(request: Request) {
     return fail(400, 'INVALID_REQUEST', parsed.error.issues[0]?.message ?? 'Demande invalide.', { fields });
   }
   const input = parsed.data;
+  // the category must be one the form currently offers (they are editable by the administration)
+  const categories = await loadCategories();
+  if (!categories.some((category) => category.id === input.category && category.enabled)) return fail(400, 'INVALID_REQUEST', 'Choisissez une catégorie.', { fields: { category: ['Choisissez une catégorie.'] } });
   if (input.website) return fail(400, 'SPAM', 'Demande invalide.');
   if (typeof input.elapsedMs === 'number' && input.elapsedMs < SUPPORT_LIMITS.minFillMs) return fail(400, 'TOO_FAST', 'Relisez votre message puis réessayez dans un instant.');
   if (containsSensitiveContent(`${input.subject}\n${input.message}`)) return fail(400, 'SENSITIVE_CONTENT', SENSITIVE_CONTENT_MESSAGE, { fields: { message: [SENSITIVE_CONTENT_MESSAGE] } });
@@ -74,6 +80,9 @@ export async function POST(request: Request) {
         return fail(429, 'RATE_LIMITED', 'Vous avez envoyé trop de demandes récemment. Réessayez plus tard.', { retryAfterSeconds: retryAfter }, { 'Retry-After': String(retryAfter) });
       }
     }
+    // Only the member who was signed in when sending is notified; a guest ticket notifies nobody.
+    if (userId) await notify(userId, ticketCreated(ticket.id, input.subject));
+    await notifyAdmins('notifyNewTicket', adminTicketNew(ticket.id, input.subject));
     return NextResponse.json({ stored: true, reference: ticketReference(ticket.id), createdAt: ticket.createdAt.toISOString(), emailSent: false }, { status: 201, headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     // P2021/P2022: the support tables are not in the database yet. Anything else is unexpected. Either way nothing was stored.
