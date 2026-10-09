@@ -140,7 +140,8 @@ export default function CinematicTransitionProvider({ children }: { children: Re
   // If the user leaves for somewhere unrelated while it plays (for example browser Back), drop the intro.
   useEffect(() => {
     if (phase === 'idle' || phase === 'leaving') return;
-    if (pathname !== destination.current && pathname !== '/profiles') finish();
+    // /profiles and /profiles/<id>/unlock (the PIN screen) are where the intro starts from, so they are not "somewhere unrelated"
+    if (pathname !== destination.current && pathname !== '/profiles' && !pathname.startsWith('/profiles/')) finish();
   }, [phase, pathname, finish]);
 
   // One animation loop per transition; it only touches the bar element, never React state.
