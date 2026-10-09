@@ -17,4 +17,4 @@ export default async function middleware(request: NextRequest) {
   return NextResponse.next();
 }
 
-export const config = { matcher: ['/', '/profiles/:path*', '/my-list/:path*', '/films-series-catalog/:path*', '/movie-series-detail/:path*'] };
+export const config = { matcher: ['/', '/profiles/:path*', '/my-list/:path*', '/account/:path*', '/admin/:path*', '/films-series-catalog/:path*', '/movie-series-detail/:path*'] };

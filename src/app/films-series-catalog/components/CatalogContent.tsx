@@ -30,7 +30,8 @@ export default function CatalogContent() {
   const [debouncedSearch, setDebouncedSearch] = useState(initialQuery);
   const [mediaType, setMediaType] = useState<'all' | MediaType>(initialType === 'movie' || initialType === 'tv' ? initialType : 'all');
   const [category, setCategory] = useState<Category>('popular');
-  const [genre, setGenre] = useState('');
+  const requestedGenre = routeParams.get('genre') ?? '';
+  const [genre, setGenre] = useState(GENRES.some((item) => String(item.id) === requestedGenre) ? requestedGenre : '');
   const [year, setYear] = useState('');
   const [rating, setRating] = useState('');
   const [sort, setSort] = useState<Sort>('popularity');
