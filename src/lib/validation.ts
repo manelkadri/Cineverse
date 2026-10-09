@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { pinProblem } from './pin-rules';
 
 export const emailSchema = z.string().trim().toLowerCase().email().max(254);
 export const passwordSchema = z.string().min(12).max(128)
@@ -19,7 +20,25 @@ export const profileInputSchema = z.object({
   parentalPin: z.string().regex(/^\d{4}$/).optional().or(z.literal('')),
 });
 
-export const profilePatchSchema = profileInputSchema.partial().refine((value) => Object.keys(value).length > 0, 'No changes supplied');
+// A profile PIN: exactly four digits and not trivially guessable (0000, 1234, 1111...).
+export const pinSchema = z.string().regex(/^\d{4}$/, 'Le code PIN doit contenir exactement 4 chiffres.').superRefine((pin, ctx) => {
+  const problem = pinProblem(pin);
+  if (problem) ctx.addIssue({ code: 'custom', message: problem });
+});
+const accountPasswordSchema = z.string().min(1).max(128);
+const pinsMatch = (value: { pin: string; confirmPin: string }) => value.pin === value.confirmPin;
+const pinsMatchMessage = { message: 'Les deux codes PIN ne correspondent pas.', path: ['confirmPin'] };
+
+// Creating a profile requires its own PIN (entered twice).
+export const profileCreateSchema = profileInputSchema.extend({ pin: pinSchema, confirmPin: z.string() }).refine(pinsMatch, pinsMatchMessage);
+// Editing a profile is a management action: it needs fresh authentication (the account password).
+export const profilePatchSchema = profileInputSchema.extend({ language: z.string().trim().min(2).max(12).optional() }).partial().extend({ password: accountPasswordSchema }) // no default: an edit must not silently reset the language
+  .refine((value) => Object.keys(value).some((key) => key !== 'password'), 'No changes supplied');
+// An empty parentalPin is what the editor sends for a profile without parental settings, so it is accepted like in profileInputSchema.
+export const profileDeleteSchema = z.object({ password: accountPasswordSchema, parentalPin: z.string().regex(/^\d{4}$/).optional().or(z.literal('')) });
+export const pinUnlockSchema = z.object({ pin: z.string().regex(/^\d{4}$/) });
+// First-time PIN for a profile created before PIN protection needs no password; changing an existing PIN does.
+export const pinSetSchema = z.object({ pin: pinSchema, confirmPin: z.string(), password: accountPasswordSchema.optional() }).refine(pinsMatch, pinsMatchMessage);
 export const profileSelectionSchema = z.object({ profileId: z.string().cuid().nullable() });
 export const mediaActionSchema = z.object({ mediaId: z.string().regex(/^(movie|tv):\d+$/) });
 export const recommendationRequestSchema = z.object({ profileId: z.string().cuid().optional() });
