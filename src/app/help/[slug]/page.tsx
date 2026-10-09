@@ -6,17 +6,21 @@ import { ArrowLeft, ChevronRight } from 'lucide-react';
 import HelpShell from '@/components/help/HelpShell';
 import SupportSection from '@/components/help/SupportSection';
 import { ArticleBody, CategoryIcon, LinkChips } from '@/components/help/HelpParts';
-import { HELP_ARTICLES, articleBySlug, articlesInCategory, categoryById } from '@/lib/help-content';
+import { categoryById } from '@/lib/help-content';
+import { loadPublishedKnowledgeBase } from '@/lib/kb-server';
+import { loadAvailability, loadCategories } from '@/lib/support-server';
 
-// Only the articles in the knowledge base exist; any other address is a 404.
-export const dynamicParams = false;
+// Only PUBLISHED articles exist (built-in content plus published knowledge-base edits); any other address, including a draft or a
+// hidden article, is a real 404.
+export const revalidate = 3600;
 
-export function generateStaticParams() {
-  return HELP_ARTICLES.map((article) => ({ slug: article.slug }));
+export async function generateStaticParams() {
+  return (await loadPublishedKnowledgeBase()).articles.map((article) => ({ slug: article.slug }));
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
-  const article = articleBySlug((await params).slug);
+  const slug = (await params).slug;
+  const article = (await loadPublishedKnowledgeBase()).articles.find((item) => item.slug === slug);
   if (!article) return { title: 'Article introuvable — Centre d’aide CINEVERSE' };
   return {
     title: `${article.title} — Centre d’aide CINEVERSE`,
@@ -26,10 +30,12 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 }
 
 export default async function HelpArticlePage({ params }: { params: Promise<{ slug: string }> }) {
-  const article = articleBySlug((await params).slug);
+  const slug = (await params).slug;
+  const [{ articles }, contactCategories, availability] = await Promise.all([loadPublishedKnowledgeBase(), loadCategories(), loadAvailability()]);
+  const article = articles.find((item) => item.slug === slug);
   if (!article) notFound();
   const category = categoryById(article.category)!;
-  const related = articlesInCategory(article.category).filter((item) => item.slug !== article.slug).slice(0, 4);
+  const related = articles.filter((item) => item.category === article.category && item.slug !== article.slug).slice(0, 4);
 
   return (
     <HelpShell>
@@ -76,7 +82,7 @@ export default async function HelpArticlePage({ params }: { params: Promise<{ sl
             </ul>
           </section>
         )}
-        <div className="mt-10"><SupportSection /></div>
+        <div className="mt-10"><SupportSection categories={contactCategories.filter((item) => item.enabled).map((item) => ({ id: item.id, label: item.label }))} availability={availability.enabled && availability.text ? availability.text : null} /></div>
         <div className="mt-8"><Link href="/help" className="inline-flex items-center gap-2 text-sm font-semibold text-[#d7d7da] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"><ArrowLeft size={16} aria-hidden="true" />Retour au Centre d’aide</Link></div>
       </article>
     </HelpShell>

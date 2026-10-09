@@ -17,20 +17,6 @@ const blockText = (block: HelpBlock) => ('items' in block ? block.items.join(' '
 
 interface Entry<T> { item: T; title: string; keywords: string; body: string }
 
-const articleEntries: Entry<HelpArticle>[] = HELP_ARTICLES.map((article) => ({
-  item: article,
-  title: normalize(article.title),
-  keywords: normalize(article.keywords.join(' ')),
-  body: normalize(`${article.summary} ${article.body.map(blockText).join(' ')} ${article.links.map((link) => link.label).join(' ')}`),
-}));
-
-const faqEntries: Entry<HelpFaq>[] = HELP_FAQ.map((faq) => ({
-  item: faq,
-  title: normalize(faq.question),
-  keywords: normalize((faq.keywords ?? []).join(' ')),
-  body: normalize(faq.answer),
-}));
-
 /** Every word of the query must appear somewhere (AND); a title hit counts most, then keywords, then the content. */
 function score(entry: Entry<unknown>, tokens: string[]) {
   let total = 0;
@@ -55,5 +41,27 @@ function run<T>(entries: Entry<T>[], query: string, category?: CategoryId | null
     .map((hit) => hit.entry.item);
 }
 
-export const searchArticles = (query: string, category?: CategoryId | null) => run(articleEntries, query, category, (article) => article.category);
-export const searchFaq = (query: string, category?: CategoryId | null) => run(faqEntries, query, category, (faq) => faq.category);
+/** A search over the given content (the live Help Center content: built-in articles plus published knowledge-base edits). */
+export function createHelpSearch(articles: HelpArticle[], faqs: HelpFaq[]) {
+  const articleEntries: Entry<HelpArticle>[] = articles.map((article) => ({
+    item: article,
+    title: normalize(article.title),
+    keywords: normalize(article.keywords.join(' ')),
+    body: normalize(`${article.summary} ${article.body.map(blockText).join(' ')} ${article.links.map((link) => link.label).join(' ')}`),
+  }));
+  const faqEntries: Entry<HelpFaq>[] = faqs.map((faq) => ({
+    item: faq,
+    title: normalize(faq.question),
+    keywords: normalize((faq.keywords ?? []).join(' ')),
+    body: normalize(faq.answer),
+  }));
+  return {
+    searchArticles: (query: string, category?: CategoryId | null) => run(articleEntries, query, category, (article) => article.category),
+    searchFaq: (query: string, category?: CategoryId | null) => run(faqEntries, query, category, (faq) => faq.category),
+  };
+}
+
+// The built-in content, for tests and any caller that does not need the knowledge-base edits.
+const builtin = createHelpSearch(HELP_ARTICLES, HELP_FAQ);
+export const searchArticles = builtin.searchArticles;
+export const searchFaq = builtin.searchFaq;

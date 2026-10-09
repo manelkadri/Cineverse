@@ -3,8 +3,8 @@
 import React, { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, ArrowRight, Search, SearchX, X } from 'lucide-react';
-import { HELP_CATEGORIES, articlesInCategory, articleBySlug, categoryById, type CategoryId } from '@/lib/help-content';
-import { searchArticles, searchFaq } from '@/lib/help-search';
+import { HELP_CATEGORIES, categoryById, type CategoryId, type HelpArticle, type HelpFaq } from '@/lib/help-content';
+import { createHelpSearch } from '@/lib/help-search';
 import Accordion from './Accordion';
 import HelpShell from './HelpShell';
 import SupportSection from './SupportSection';
@@ -13,14 +13,17 @@ import { CategoryIcon, LinkChips } from './HelpParts';
 // A short, curated "start here" list shown when nothing is searched or selected.
 const FEATURED = ['creer-un-profil', 'ouvrir-un-profil-avec-son-code-pin', 'code-pin-oublie', 'disponibilite-des-contenus', 'changer-le-mot-de-passe', 'signaler-un-probleme'];
 
-export default function HelpCenter() {
+export default function HelpCenter({ articles: allArticles, faqs: allFaqs, categories: contactCategories, availability }: { articles: HelpArticle[]; faqs: HelpFaq[]; categories?: { id: string; label: string }[]; availability?: string | null }) {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<CategoryId | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const filtering = query.trim() !== '' || category !== null;
-  const articles = useMemo(() => (filtering ? searchArticles(query, category) : FEATURED.map((slug) => articleBySlug(slug)!).filter(Boolean)), [filtering, query, category]);
-  const faqs = useMemo(() => searchFaq(query, category), [query, category]);
+  // the search runs over the live content (built-in articles plus published knowledge-base edits)
+  const search = useMemo(() => createHelpSearch(allArticles, allFaqs), [allArticles, allFaqs]);
+  const featured = useMemo(() => FEATURED.map((slug) => allArticles.find((article) => article.slug === slug)).filter((article): article is HelpArticle => Boolean(article)), [allArticles]);
+  const articles = useMemo(() => (filtering ? search.searchArticles(query, category) : featured), [filtering, query, category, search, featured]);
+  const faqs = useMemo(() => search.searchFaq(query, category), [query, category, search]);
   const empty = filtering && articles.length === 0 && faqs.length === 0;
   const activeCategory = category ? categoryById(category) : null;
 
@@ -81,7 +84,7 @@ export default function HelpCenter() {
                     <span className="min-w-0">
                       <span className="block text-base font-bold text-white">{item.title}</span>
                       <span className="mt-1 block text-sm text-[#9a9aa3]">{item.description}</span>
-                      <span className="mt-2 block text-xs font-semibold text-primary">{articlesInCategory(item.id).length} articles</span>
+                      <span className="mt-2 block text-xs font-semibold text-primary">{allArticles.filter((article) => article.category === item.id).length} articles</span>
                     </span>
                   </button>
                 </li>
@@ -124,7 +127,7 @@ export default function HelpCenter() {
                 content: (
                   <>
                     <p>{faq.answer}</p>
-                    <LinkChips links={[...(faq.links ?? []), { label: 'Lire l’article complet', href: `/help/${faq.article}` }]} />
+                    <LinkChips links={[...(faq.links ?? []), ...(faq.article && allArticles.some((article) => article.slug === faq.article) ? [{ label: 'Lire l’article complet', href: `/help/${faq.article}` }] : [])]} />
                   </>
                 ),
               }))}
@@ -144,7 +147,7 @@ export default function HelpCenter() {
           </div>
         )}
 
-        <SupportSection />
+        <SupportSection categories={contactCategories} availability={availability} />
 
         <div className="flex justify-center pb-4">
           <Link href="/" className="inline-flex items-center gap-2 rounded-lg border border-white/15 px-5 py-2.5 text-sm font-semibold text-[#d7d7da] transition-colors hover:border-white/40 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"><ArrowLeft size={16} aria-hidden="true" />Retour à CINEVERSE</Link>

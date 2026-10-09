@@ -147,6 +147,33 @@ export const HELP_ARTICLES: HelpArticle[] = [
     keywords: ['nom', 'email', 'informations personnelles', 'profil du compte', 'modifier'],
   },
 
+  {
+    slug: 'notifications',
+    title: 'Les notifications (la cloche)',
+    category: 'compte',
+    summary: 'Ce que signale la cloche en haut à droite, et comment régler ce que vous recevez.',
+    body: [
+      { type: 'p', text: 'La cloche de la barre de navigation rassemble les notifications de votre compte. Un badge rouge n’apparaît que lorsqu’il y a des notifications non lues, avec leur nombre.' },
+      { type: 'h', text: 'Ce que vous pouvez recevoir' },
+      { type: 'list', items: [
+        'Sécurité : mot de passe modifié, code PIN créé ou modifié, profil verrouillé après plusieurs codes incorrects, sessions fermées. Elles ne contiennent jamais de mot de passe, de code PIN ou de jeton.',
+        'Support : votre demande a été enregistrée, puis chaque changement de statut (en cours, résolue, fermée), uniquement si vous étiez connecté en l’envoyant.',
+        'Catalogue et service : annonces publiées par l’équipe (nouveautés du catalogue, évolutions du service).',
+      ] },
+      { type: 'steps', items: [
+        'Cliquez sur la cloche pour ouvrir le panneau ; « Toutes » et « Non lues » filtrent la liste.',
+        'Cliquez sur une notification pour ouvrir la page concernée : elle est alors marquée comme lue.',
+        'Le petit bouton à droite d’une notification la marque comme lue ou non lue ; « Tout marquer comme lu » vide le badge.',
+        'Appuyez sur Échap ou cliquez ailleurs pour fermer le panneau.',
+      ] },
+      { type: 'h', text: 'Régler les notifications' },
+      { type: 'p', text: 'Dans Mon compte, « Préférences du compte » permet de désactiver les annonces du catalogue et du service. Les notifications de sécurité et le suivi de vos demandes d’aide sont toujours activés et ne peuvent pas être désactivés.' },
+      { type: 'note', text: 'CINEVERSE n’annonce pas automatiquement chaque sortie de film ou de série : aucune notification de nouveauté n’est créée sans annonce de l’équipe. Aucune notification n’est envoyée par e-mail.' },
+    ],
+    links: [ACCOUNT, { label: 'Protéger son compte', href: '/help/proteger-son-compte' }],
+    keywords: ['notification', 'notifications', 'cloche', 'alerte', 'badge', 'non lue', 'marquer comme lu', 'annonce', 'preferences'],
+  },
+
   // ---------------------------------------------------------------- Profils et codes PIN
   {
     slug: 'creer-un-profil',
@@ -624,9 +651,12 @@ export const HELP_ARTICLES: HelpArticle[] = [
         'Ces données sont supprimées avec votre compte, et seule l’équipe de support peut les consulter.',
       ] },
       { type: 'warning', text: 'N’écrivez jamais votre mot de passe, un code PIN ou un jeton de connexion : un message qui semble en contenir est refusé, et le support ne vous les demandera jamais.' },
-      { type: 'note', text: 'Aucun e-mail de confirmation n’est envoyé automatiquement : l’équipe consulte les demandes depuis son espace de suivi et peut vous répondre à l’adresse indiquée. Le nombre de demandes est limité pour éviter les abus.' },
+      { type: 'h', text: 'Suivre votre demande et lire les réponses' },
+      { type: 'p', text: 'Si vous étiez connecté en envoyant la demande, elle apparaît dans Mon compte, sous « Mes demandes d’aide ». Vous y lisez les réponses de l’équipe, vous pouvez envoyer un message complémentaire et, si la demande était résolue ou fermée, la rouvrir. Une notification vous prévient lorsqu’une réponse arrive.' },
+      { type: 'warning', text: 'Une demande envoyée sans être connecté ne peut pas être consultée ensuite : la référence seule ne donne accès à rien, pour que personne ne puisse lire la demande d’un autre. L’équipe ne peut pas y répondre depuis CINEVERSE.' },
+      { type: 'note', text: 'Aucun e-mail de confirmation ni de réponse n’est envoyé automatiquement. Le nombre de demandes et de messages est limité pour éviter les abus.' },
     ],
-    links: [{ label: 'Ouvrir le formulaire', href: '/help#contact' }, { label: 'Signaler un problème', href: '/help/signaler-un-probleme' }],
+    links: [{ label: 'Ouvrir le formulaire', href: '/help#contact' }, { label: 'Mes demandes d’aide', href: '/account/support' }, { label: 'Signaler un problème', href: '/help/signaler-un-probleme' }],
     keywords: ['contact', 'support', 'formulaire', 'ticket', 'reference', 'demande', 'aide', 'ecrire', 'message'],
   },
 ];
@@ -635,6 +665,7 @@ export const HELP_FAQ: HelpFaq[] = [
   { id: 'faq-creer-compte', category: 'compte', article: 'creer-un-compte', question: 'Comment créer un compte ?', answer: 'Sur la page de connexion, choisissez l’onglet « Inscription », saisissez votre nom, votre e-mail et un mot de passe d’au moins 12 caractères (minuscule, majuscule, chiffre), puis cliquez sur « Créer le compte ».', links: [LOGIN] },
   { id: 'faq-mdp-oublie', category: 'compte', article: 'mot-de-passe-oublie', question: 'J’ai oublié mon mot de passe, que faire ?', answer: 'La réinitialisation par e-mail n’existe pas encore dans CINEVERSE. Vérifiez l’adresse e-mail et les majuscules saisies ; si le mot de passe est perdu, la récupération n’est pas possible depuis l’application dans cette version.', keywords: ['reset', 'reinitialiser'] },
   { id: 'faq-changer-mdp', category: 'compte', article: 'changer-le-mot-de-passe', question: 'Comment changer mon mot de passe ?', answer: 'Ouvrez Mon compte, section « Mot de passe et sécurité », saisissez le mot de passe actuel puis le nouveau (deux fois). Vos autres sessions sont fermées automatiquement.', links: [ACCOUNT] },
+  { id: 'faq-notifications', category: 'compte', article: 'notifications', question: 'À quoi sert la cloche et comment régler les notifications ?', answer: 'La cloche rassemble les notifications de sécurité, le suivi de vos demandes d’aide et les annonces de l’équipe. Le badge rouge n’apparaît que s’il y a des notifications non lues. Dans Mon compte, vous pouvez désactiver les annonces ; la sécurité et le suivi de vos demandes restent toujours actifs.', links: [ACCOUNT] },
   { id: 'faq-creer-pin', category: 'profils', article: 'creer-un-code-pin', question: 'Comment créer un code PIN ?', answer: 'Le code PIN, de 4 chiffres, se choisit et se confirme à la création du profil. Les codes trop simples (1111, 1234, 0000…) sont refusés. Un profil plus ancien vous demande d’en créer un à sa première ouverture.', links: [PROFILES] },
   { id: 'faq-pin-oublie', category: 'profils', article: 'code-pin-oublie', question: 'J’ai oublié le code PIN d’un profil : puis-je le récupérer ?', answer: 'Un code ne peut pas être retrouvé, mais vous pouvez en définir un nouveau : ouvrez « Gérer les profils », choisissez le profil, saisissez le mot de passe de votre compte puis « Changer le code PIN ». Rien n’est perdu.', links: [PROFILES] },
   { id: 'faq-pin-bloque', category: 'profils', article: 'blocage-temporaire-du-code-pin', question: 'Pourquoi mon profil est-il bloqué après plusieurs erreurs ?', answer: 'Après 5 codes incorrects en 15 minutes, le profil est verrouillé temporairement pour empêcher de deviner le code. Le message indique le temps d’attente ; même le bon code est refusé jusqu’à la fin du délai.' },
@@ -650,7 +681,7 @@ export const HELP_FAQ: HelpFaq[] = [
   { id: 'faq-sessions', category: 'securite', article: 'gerer-les-sessions-actives', question: 'Comment me déconnecter de mes autres appareils ?', answer: 'Dans Mon compte › « Appareils et sessions », fermez une session, les autres sessions, ou utilisez « Se déconnecter partout ».', links: [ACCOUNT] },
   { id: 'faq-images', category: 'technique', article: 'images-qui-ne-chargent-pas', question: 'Les affiches ne s’affichent pas, que faire ?', answer: 'Rechargez la page, vérifiez votre connexion et désactivez un éventuel bloqueur ou VPN : les affiches viennent du serveur d’images de TMDB.' },
   { id: 'faq-bug', category: 'technique', article: 'signaler-un-probleme', question: 'Comment signaler un problème ?', answer: 'Notez ce que vous faisiez, le message exact et la page concernée, sans jamais inclure de mot de passe ou de code PIN, puis envoyez-les avec le formulaire « Vous avez encore besoin d’aide ? ».', links: [{ label: 'Contacter le support', href: '/help#contact' }] },
-  { id: 'faq-contact', category: 'technique', article: 'contacter-le-support', question: 'Comment contacter le support ?', answer: 'Utilisez le formulaire en bas du Centre d’aide : il fonctionne même sans connexion. Votre demande est enregistrée et une référence s’affiche ; aucun e-mail de confirmation n’est envoyé automatiquement.', links: [{ label: 'Ouvrir le formulaire', href: '/help#contact' }], keywords: ['ticket', 'formulaire'] },
+  { id: 'faq-contact', category: 'technique', article: 'contacter-le-support', question: 'Comment contacter le support ?', answer: 'Utilisez le formulaire en bas du Centre d’aide : il fonctionne même sans connexion. Votre demande est enregistrée et une référence s’affiche. Connecté, vous retrouvez la demande et les réponses de l’équipe dans Mon compte ; sans connexion, aucune réponse ne peut vous être livrée. Aucun e-mail n’est envoyé automatiquement.', links: [{ label: 'Ouvrir le formulaire', href: '/help#contact' }, { label: 'Mes demandes d’aide', href: '/account/support' }], keywords: ['ticket', 'formulaire'] },
 ];
 
 export const articleBySlug = (slug: string) => HELP_ARTICLES.find((article) => article.slug === slug);

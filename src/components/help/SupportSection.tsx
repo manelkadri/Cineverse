@@ -20,8 +20,24 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const inputClass = 'w-full rounded-lg border bg-[#0d0f13] px-3.5 py-2.5 text-sm text-white placeholder:text-[#6f6f78] transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-60';
 const borderFor = (error?: string) => (error ? 'border-red-500/60 focus:border-red-400' : 'border-white/10 focus:border-primary');
 
-export default function SupportSection() {
+type CategoryOption = { id: string; label: string };
+
+export default function SupportSection({ categories: given, availability: givenAvailability }: { categories?: CategoryOption[]; availability?: string | null } = {}) {
   const { data: session } = useSession();
+  // The categories (and the availability text) are configured in the administration. Pages pass them in; otherwise they are
+  // read from the public endpoint, with the built-in list as a fallback so the form is never empty.
+  const [categories, setCategories] = useState<CategoryOption[]>(given ?? SUPPORT_CATEGORIES.map((item) => ({ id: item.id, label: item.label })));
+  const [availability, setAvailability] = useState<string | null>(givenAvailability ?? null);
+  useEffect(() => {
+    if (given) return;
+    let cancelled = false;
+    fetch('/api/support/categories', { cache: 'no-store' }).then((response) => (response.ok ? response.json() : null)).then((body) => {
+      if (cancelled || !body) return;
+      if (Array.isArray(body.categories) && body.categories.length) setCategories(body.categories);
+      setAvailability(body.availability?.text ?? null);
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [given]);
   const [subject, setSubject] = useState('');
   const [category, setCategory] = useState('');
   const [email, setEmail] = useState('');
@@ -96,6 +112,7 @@ export default function SupportSection() {
         <div className="min-w-0 flex-1">
           <h2 id="contact-title" className="text-xl font-extrabold">Vous avez encore besoin d’aide ?</h2>
           <p className="mt-2 text-sm leading-relaxed text-[#b7b7bd]">Décrivez votre problème : votre demande est enregistrée et l’équipe la consulte depuis son espace de suivi. Aucun e-mail de confirmation n’est envoyé automatiquement ; vous recevrez une référence à conserver.</p>
+          {availability && <p data-testid="support-availability" className="mt-3 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-[#d7d7da]">{availability}</p>}
         </div>
       </div>
 
@@ -118,7 +135,7 @@ export default function SupportSection() {
               <label htmlFor="support-category" className="mb-1.5 block text-sm font-semibold text-[#d7d7da]">Catégorie</label>
               <select id="support-category" value={category} onChange={(event) => setCategory(event.target.value)} aria-invalid={Boolean(errors.category)} aria-describedby={errors.category ? 'support-category-error' : undefined} className={`${inputClass} ${borderFor(errors.category)}`}>
                 <option value="">Choisir…</option>
-                {SUPPORT_CATEGORIES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+                {categories.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
               </select>
               {errors.category && <p id="support-category-error" role="alert" className="mt-1.5 text-xs text-red-300">{errors.category}</p>}
             </div>

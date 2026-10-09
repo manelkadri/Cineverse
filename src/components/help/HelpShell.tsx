@@ -45,7 +45,7 @@ export default function HelpShell({ children }: { children: React.ReactNode }) {
 
 function PublicHeader() {
   return (
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08] bg-[#08090D]/92 nav-blur">
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.08] bg-[#08090D]/90 nav-blur">
       <div className="mx-auto flex h-[66px] max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link href="/help" aria-label="CINEVERSE, Centre d’aide" className="leading-none"><CineverseLogo className="text-[27px]" /></Link>
         <nav aria-label="Navigation du Centre d’aide" className="flex items-center gap-2 sm:gap-3">
