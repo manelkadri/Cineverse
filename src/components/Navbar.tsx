@@ -2,10 +2,12 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import CineverseLogo from '@/components/CineverseLogo';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Bell, Check, ChevronDown, CircleHelp, Home, ListVideo, LogOut, Menu, Pencil, Search, Settings, UserRound, X } from 'lucide-react';
 import ProfileAvatar from './ProfileAvatar';
 import { useProfiles } from '@/context/ProfileContext';
+import { signOut } from 'next-auth/react';
 
 const navigation = [
   { label: 'Accueil', href: '/' },
@@ -69,13 +71,15 @@ export default function Navbar() {
     router.push('/profiles');
   };
 
+  const logout = () => signOut({ callbackUrl: '/login' });
+
   return (
     <>
       <nav className={`fixed inset-x-0 top-0 z-50 border-t border-white/[0.08] transition-colors duration-300 nav-blur ${scrolled ? 'border-b border-white/10 bg-[#050608]/95 shadow-xl shadow-black/30' : 'bg-gradient-to-b from-black/95 via-black/70 to-black/10'}`} aria-label="Navigation principale">
         <div className="mx-auto max-w-screen-2xl px-5 sm:px-7 lg:px-10">
           <div className="flex h-[66px] items-center justify-between">
             <div className="flex min-w-0 items-center gap-9 lg:gap-12">
-              <Link href="/" className="shrink-0 leading-none" aria-label="Cineverse - Accueil"><span className="font-display text-[21px] tracking-[0.015em]"><span className="text-[#f00816]">CINE</span><span className="text-[#f1f1f1]">VERSE</span></span></Link>
+              <Link href="/" className="shrink-0 leading-none" aria-label="Cineverse - Accueil"><CineverseLogo className="text-[25px]" /></Link>
               <div className="hidden items-stretch gap-7 md:flex">
                 {navigation.map((item) => {
                   const active = isActive(item.label, item.href);
@@ -112,7 +116,7 @@ export default function Navbar() {
                       <button type="button" role="menuitem" className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-[#d7d7da] hover:bg-white/[0.07] hover:text-white"><Settings size={19} className="text-[#aeb0b5]" />Compte</button>
                       <button type="button" role="menuitem" className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-[#d7d7da] hover:bg-white/[0.07] hover:text-white"><CircleHelp size={19} className="text-[#aeb0b5]" />Centre d&apos;aide</button>
                     </div>
-                    <div className="border-t border-white/[0.08] p-2"><button type="button" role="menuitem" onClick={exitProfile} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-bold text-[#e3e3e5] hover:bg-primary/15"><LogOut size={19} className="text-primary" />Quitter le profil</button></div>
+                    <div className="border-t border-white/[0.08] p-2"><button type="button" role="menuitem" onClick={exitProfile} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-bold text-[#e3e3e5] hover:bg-primary/15"><UserRound size={19} className="text-primary" />Quitter le profil</button><button type="button" role="menuitem" onClick={logout} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-bold text-[#e3e3e5] hover:bg-primary/15"><LogOut size={19} className="text-primary" />Se déconnecter</button></div>
                   </div>
                 )}
               </div>

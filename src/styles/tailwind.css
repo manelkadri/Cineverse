@@ -25,7 +25,9 @@
   --radius: 8px;
   --rating: #F5B301;
   --font-sans: 'Plus Jakarta Sans', sans-serif;
-  --font-display: 'Anton', sans-serif;
+  /* Headings keep the generic sans they have always rendered in: the Anton @import below never loaded, and the
+     wordmark now loads Anton through next/font, so naming it here would restyle every heading. Use .cineverse-logo for Anton. */
+  --font-display: sans-serif;
 }
 
 @layer base {
@@ -211,4 +213,250 @@
   .filter-select:focus {
     border-color: var(--primary);
   }
+}
+/* ==========================================================================
+   CINEVERSE wordmark: CINE in #E50914, VERSE in #FFFFFF (no gradients)
+   ========================================================================== */
+.cineverse-logo {
+  --logo-red: #E50914;
+  --logo-white: #FFFFFF;
+  display: inline-block;
+  font-family: var(--font-logo), 'Anton', Impact, 'Arial Black', sans-serif;
+  font-weight: 900;
+  font-synthesis: none; /* Anton ships a single, already heavy weight: declare 900 without faux-bold smearing */
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  white-space: nowrap;
+}
+.cineverse-logo__cine { color: var(--logo-red); }
+.cineverse-logo__verse { color: var(--logo-white); }
+
+/* ==========================================================================
+   Cinematic loading screen (src/app/loading.tsx): real markup + CSS animation only
+   ========================================================================== */
+.cv-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  overflow: hidden;
+  background: #050508;
+  color: #fff;
+  /* mounted only by CinematicTransitionProvider after a profile was selected; fades in at once */
+  animation: cv-overlay-in 220ms ease-out;
+}
+/* fade-out at the end of the transition */
+.cv-loading--leaving { opacity: 0; pointer-events: none; transition: opacity 320ms ease-out; }
+.cv-loading__posters {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  contain: strict;
+  isolation: isolate;
+}
+
+/* Each clipped column owns a continuously translated track. Only the outer pair is rendered on phones; extra
+   depth is progressively added without changing the clean central composition. */
+.cv-poster-column {
+  display: none;
+  position: absolute;
+  top: -12vh;
+  bottom: -12vh;
+  width: clamp(128px, 12vw, 174px);
+  overflow: hidden;
+  opacity: var(--column-opacity);
+  filter: brightness(0.58) saturate(0.72) blur(0.45px);
+  transform: rotate(var(--column-tilt)) scale(1.04);
+  transform-origin: center;
+  box-shadow: 0 0 44px rgba(229, 9, 20, 0.08), 0 28px 70px rgba(0, 0, 0, 0.85);
+  animation: cv-column-in 750ms ease-out both;
+}
+.cv-poster-column--tier-1 { display: block; }
+.cv-poster-column--left.cv-poster-column--outer { left: -28px; }
+.cv-poster-column--right.cv-poster-column--outer { right: -28px; }
+.cv-poster-column--left.cv-poster-column--middle { left: 8vw; }
+.cv-poster-column--right.cv-poster-column--middle { right: 8vw; }
+.cv-poster-column--left.cv-poster-column--inner { left: 18vw; }
+.cv-poster-column--right.cv-poster-column--inner { right: 18vw; }
+
+.cv-poster-track {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  backface-visibility: hidden;
+  will-change: transform;
+  animation-duration: var(--column-duration);
+  animation-delay: var(--column-delay);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+.cv-poster-track--up { animation-name: cv-posters-up; }
+.cv-poster-track--down { animation-name: cv-posters-down; }
+.cv-poster-group {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: clamp(8px, 0.7vw, 13px);
+  padding-bottom: clamp(8px, 0.7vw, 13px);
+}
+.cv-column-poster {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  flex: none;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: clamp(5px, 0.55vw, 10px);
+  background: #0d0f13 var(--poster-image) center / cover no-repeat;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.72), 0 0 16px rgba(229, 9, 20, 0.06);
+  transform: rotate(var(--poster-tilt));
+}
+.cv-column-poster::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(4, 5, 8, 0.05), rgba(4, 5, 8, 0.34));
+}
+
+@media (min-width: 640px) {
+  .cv-poster-column { width: clamp(116px, 18vw, 145px); }
+  .cv-poster-column--tier-2 { display: block; }
+  .cv-poster-column--left.cv-poster-column--outer { left: -25px; }
+  .cv-poster-column--right.cv-poster-column--outer { right: -25px; }
+  .cv-poster-column--left.cv-poster-column--middle { left: 11vw; }
+  .cv-poster-column--right.cv-poster-column--middle { right: 11vw; }
+}
+@media (min-width: 1024px) {
+  .cv-poster-column { width: clamp(128px, 12vw, 174px); }
+  .cv-poster-column--tier-3 { display: block; }
+  .cv-poster-column--left.cv-poster-column--middle { left: 8vw; }
+  .cv-poster-column--right.cv-poster-column--middle { right: 8vw; }
+}
+@media (max-width: 639px) {
+  .cv-poster-column {
+    top: -9vh;
+    bottom: -9vh;
+    width: clamp(100px, 31vw, 132px);
+    filter: brightness(0.48) saturate(0.66) blur(0.7px);
+  }
+  .cv-poster-column--left.cv-poster-column--outer { left: -32px; }
+  .cv-poster-column--right.cv-poster-column--outer { right: -32px; }
+}
+
+/* keeps the middle dark and uncluttered, darkens the corners */
+.cv-loading__vignette {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(5, 5, 8, 0.08) 0%, rgba(5, 5, 8, 0.42) 20%, rgba(5, 5, 8, 0.96) 38%, rgba(5, 5, 8, 0.96) 62%, rgba(5, 5, 8, 0.42) 80%, rgba(5, 5, 8, 0.08) 100%),
+    radial-gradient(ellipse 72% 68% at 50% 50%, rgba(5, 5, 8, 0.9) 0%, rgba(5, 5, 8, 0.38) 62%, rgba(5, 5, 8, 0.06) 100%),
+    radial-gradient(ellipse at center, transparent 55%, rgba(5, 5, 8, 0.78) 100%);
+}
+
+/* subtle red ambient glow behind the wordmark */
+.cv-loading__glow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(120vw, 1100px);
+  height: min(70vh, 520px);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(229, 9, 20, 0.2) 0%, rgba(229, 9, 20, 0.08) 38%, transparent 68%);
+  animation: cv-fade-in 1000ms ease-out 450ms both, cv-glow-pulse 4500ms ease-in-out 1450ms infinite alternate;
+}
+
+.cv-loading__center {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 0 5vw;
+}
+/* the bar stretches to the width of the wordmark, so it always stays proportional to it */
+.cv-loading__brand {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: clamp(1rem, 2.6vw, 1.75rem);
+}
+.cv-loading__logo {
+  font-size: clamp(3.4rem, 13.5vw, 10.5rem);
+  letter-spacing: 0.03em;
+  text-align: center;
+  text-shadow: 0 0.04em 0.12em rgba(0, 0, 0, 0.55);
+  animation: cv-fade-in 800ms ease-out 200ms both, cv-breathe 4500ms ease-in-out 1000ms infinite alternate;
+}
+
+.cv-bar {
+  position: relative;
+  height: 3px;
+  border-radius: 999px;
+  background: #2a2b31;
+  clip-path: inset(-16px 0); /* lets the glow spill above and below the track but not past its ends */
+  animation: cv-fade-in 300ms ease-out both;
+}
+.cv-bar__fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  border-radius: 999px;
+  background: #E50914;
+  box-shadow: 0 0 8px 1px rgba(229, 9, 20, 0.85), 0 0 22px 4px rgba(229, 9, 20, 0.45);
+  /* Progress is a transform driven from CinematicTransitionProvider: it starts at exactly 0 and only ever grows
+     to the right (transform-origin: left); there is no looping or oscillating animation. */
+  transform: scaleX(0);
+  transform-origin: left center;
+  will-change: transform;
+}
+
+@keyframes cv-column-in {
+  from { opacity: 0; transform: rotate(var(--column-tilt)) scale(1.07); }
+  to { opacity: var(--column-opacity); transform: rotate(var(--column-tilt)) scale(1.04); }
+}
+@keyframes cv-posters-up {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(0, -50%, 0); }
+}
+@keyframes cv-posters-down {
+  from { transform: translate3d(0, -50%, 0); }
+  to { transform: translate3d(0, 0, 0); }
+}
+@keyframes cv-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes cv-overlay-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes cv-breathe { from { transform: scale(1); } to { transform: scale(1.03); } }
+@keyframes cv-glow-pulse { from { opacity: 0.78; } to { opacity: 1; } }
+
+/* Completion: once the destination is ready the bar reaches 100%, glows, and a light sweeps along it. */
+.cv-bar--done .cv-bar__fill { box-shadow: 0 0 10px 2px rgba(229, 9, 20, 0.95), 0 0 30px 6px rgba(229, 9, 20, 0.6); }
+.cv-bar__flash {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  left: 0;
+  width: 22%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0));
+  opacity: 0;
+  transform: translateX(-120%);
+}
+.cv-bar--done .cv-bar__flash { animation: cv-flash 300ms ease-out both; }
+@keyframes cv-flash {
+  0% { opacity: 0; transform: translateX(-120%); }
+  25% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(500%); }
+}
+
+/* route content eases in over the loading screen instead of snapping; ends with no lingering stacking context */
+main { animation: cv-page-in 220ms ease-out backwards; }
+@keyframes cv-page-in { from { opacity: 0.35; } to { opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .cv-poster-column, .cv-poster-track, .cv-loading__logo, .cv-loading__glow, .cv-bar, .cv-bar__fill, main { animation: none; }
+  .cv-poster-track { transform: translate3d(0, -25%, 0); }
+  .cv-loading, .cv-bar--done .cv-bar__flash { animation: none; } /* progress itself is shown in coarse steps by the component */
+  .cv-loading--leaving { transition: none; }
 }

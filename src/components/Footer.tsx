@@ -1,15 +1,13 @@
 import React from 'react';
 import Link from 'next/link';
+import CineverseLogo from '@/components/CineverseLogo';
 
 export default function Footer() {
   return (
     <footer className="bg-background-secondary border-t border-border mt-12 py-12 px-4 lg:px-8 xl:px-10 pb-24 md:pb-12">
       <div className="max-w-screen-2xl mx-auto">
         <div className="mb-8">
-          <span className="font-display text-2xl tracking-widest">
-            <span className="text-primary">CINE</span>
-            <span className="text-white">VERSE</span>
-          </span>
+          <CineverseLogo className="text-[29px]" />
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
           {[
