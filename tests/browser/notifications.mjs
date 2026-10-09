@@ -257,11 +257,13 @@ check('staff announce from the admin page; the bell of an opted-in member shows 
   const watcher = await register(browser);
   const { context, page, email } = await register(browser);
   execSync(GRANT, { env: { ...process.env, ADMIN_EMAIL: email }, stdio: 'ignore' }); // restarts the isolated stack
+  await page.context().clearCookies(); // a signed-in visitor would be sent on by /login
   await page.goto(`${BASE}/login`);
   await page.getByLabel('Email', { exact: true }).fill(email);
   await page.locator('form input[type="password"]').first().fill(PASSWORD);
   await page.getByRole('button', { name: 'Se connecter' }).click();
   await page.waitForURL(/\/profiles/, { timeout: 30000 });
+  await watcher.page.context().clearCookies(); // a signed-in visitor would be sent on by /login
   await watcher.page.goto(`${BASE}/login`);
   await watcher.page.getByLabel('Email', { exact: true }).fill(watcher.email);
   await watcher.page.locator('form input[type="password"]').first().fill(PASSWORD);

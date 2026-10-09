@@ -130,12 +130,13 @@ check('auto-verifies exactly at the 4th digit (one request, no Enter, no button)
 check('wrong PIN: stays put, "Code PIN incorrect" with icon, shake, red boxes, digits cleared, focus restored, no loader, no hint about digits', async () => {
   const { context, page } = await newUser(browser, { profiles: [['Alex', PIN_A]] });
   await openPin(page, 'Alex');
+  const shaken = page.waitForSelector('.cv-pin--shake', { state: 'attached', timeout: 10000 }); // the shake lasts under 500 ms: watch for it from the start
   await page.keyboard.type('1111');
   const alert = page.locator('#pin-problem');
   await alert.waitFor({ timeout: 10000 });
   assert.equal((await alert.textContent()).trim(), 'Code PIN incorrect');
   assert.equal(await alert.locator('svg').count(), 1, 'error icon');
-  await page.waitForSelector('.cv-pin--shake', { timeout: 2000 });
+  await shaken;
   assert.match(page.url(), /\/unlock$/);
   assert.equal(await dots(page), 0, 'digits cleared');
   await page.waitForFunction(() => document.activeElement?.id === 'profile-pin');

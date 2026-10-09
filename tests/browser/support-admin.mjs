@@ -35,6 +35,7 @@ const register = async (browser, label) => {
   return { context, page, email };
 };
 const login = async (page, email) => {
+  await page.context().clearCookies(); // a signed-in visitor would be sent on by /login
   await go(page, `${BASE}/login`);
   await page.getByLabel('Email', { exact: true }).fill(email);
   await page.locator('form input[type="password"]').first().fill(PASSWORD);

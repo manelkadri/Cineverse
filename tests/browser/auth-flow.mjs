@@ -1,4 +1,4 @@
-/* global document, window */
+/* global document */
 // Browser tests for what opening the site does in each authentication state (real Chromium).
 //
 //   npm i -D playwright && npx playwright install chromium     (not a project dependency)

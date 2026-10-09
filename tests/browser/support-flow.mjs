@@ -215,6 +215,7 @@ check('support staff open the administration from the account page; ordinary mem
   assert.equal(created.status(), 201);
   const reference = (await created.json()).reference;
   execSync(GRANT, { env: { ...process.env, ADMIN_EMAIL: email }, stdio: 'ignore' }); // restarts the isolated stack
+  await page.context().clearCookies(); // a signed-in visitor would be sent on by /login
   await page.goto(`${BASE}/login`);
   await page.getByLabel('Email', { exact: true }).fill(email);
   await page.locator('form input[type="password"]').first().fill(PASSWORD);
