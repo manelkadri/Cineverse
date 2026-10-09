@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCatalog, TmdbError } from '@/lib/tmdb';
 import type { CatalogQuery } from '@/lib/tmdb-types';
+import { currentProfileAccess, restrictItemsForProfile } from '@/lib/content-access';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,7 +21,9 @@ export async function GET(request: NextRequest) {
     page: Math.max(1, Math.min(500, Number(params.get('page')) || 1)),
   };
   try {
-    return NextResponse.json(await getCatalog(query));
+    const [result, access] = await Promise.all([getCatalog(query), currentProfileAccess()]);
+    const items = restrictItemsForProfile(result.items, access);
+    return NextResponse.json({ ...result, items, totalResults: access?.isKids ? items.length : result.totalResults });
   } catch (error) {
     const status = error instanceof TmdbError ? error.status : 502;
     return NextResponse.json({ error: 'Unable to load TMDB catalog' }, { status });
