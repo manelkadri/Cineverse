@@ -6,6 +6,8 @@ import { reauthDenied, verifyAccountPassword } from '@/lib/account-reauth';
 import { hashProfilePin, pinIdentity } from '@/lib/profile-pin';
 import { grantProfileUnlock } from '@/lib/profile-session';
 import { pinSetSchema } from '@/lib/validation';
+import { notify } from '@/lib/notifications';
+import { pinSet } from '@/lib/notification-events';
 
 export const runtime = 'nodejs';
 
@@ -24,7 +26,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     const fields = parsed.error.flatten().fieldErrors;
     return NextResponse.json({ error: fields.pin?.[0] ?? fields.confirmPin?.[0] ?? 'Code PIN invalide.', code: 'PIN_INVALID', fields }, { status: 400 });
   }
-  const profile = await prisma.profile.findFirst({ where: { id, userId: context.userId }, select: { id: true, profilePinHash: true } });
+  const profile = await prisma.profile.findFirst({ where: { id, userId: context.userId }, select: { id: true, name: true, profilePinHash: true } });
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
   const profilePinHash = await hashProfilePin(profile.id, parsed.data.pin);
 
@@ -32,6 +34,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     // `profilePinHash: null` in the condition makes this race-safe: only the first of two simultaneous requests wins.
     const { count } = await prisma.profile.updateMany({ where: { id: profile.id, userId: context.userId, profilePinHash: null }, data: { profilePinHash } });
     if (count === 0) return NextResponse.json({ error: 'Un code PIN existe déjà pour ce profil.', code: 'PIN_ALREADY_SET' }, { status: 409 });
+    await notify(context.userId, pinSet(profile.id, profile.name, profilePinHash, true));
     return grantProfileUnlock(context, profile.id);
   }
 
@@ -40,5 +43,6 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   if (denied) return denied;
   await prisma.profile.update({ where: { id: profile.id }, data: { profilePinHash } });
   await prisma.authAttempt.deleteMany({ where: { identifierHash: pinIdentity(context.userId, profile.id).sourceHash, success: false } });
+  await notify(context.userId, pinSet(profile.id, profile.name, profilePinHash, false));
   return NextResponse.json({ updated: true });
 }

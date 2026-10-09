@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma';
 import { noStore, requireAccount } from '@/lib/account-api';
 import { reauthDenied, verifyAccountPassword } from '@/lib/account-reauth';
 import { passwordChangeSchema } from '@/lib/validation';
+import { notify } from '@/lib/notifications';
+import { passwordChanged } from '@/lib/notification-events';
 
 export const runtime = 'nodejs';
 
@@ -25,5 +27,6 @@ export async function POST(request: Request) {
     prisma.user.update({ where: { id: userId }, data: { passwordHash } }),
     prisma.session.deleteMany({ where: { userId, sessionToken: { not: sid } } }),
   ]);
+  await notify(userId, passwordChanged(passwordHash));
   return NextResponse.json({ changed: true, otherSessionsRevoked: revoked.count }, { headers: noStore });
 }

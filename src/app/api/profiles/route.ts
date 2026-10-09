@@ -2,6 +2,7 @@ import { hash } from 'bcryptjs';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticatedContext } from '@/lib/server-auth';
+import { resolveSessionState } from '@/lib/session-state';
 import { isAuthRuntimeConfigured } from '@/lib/auth-security';
 import { profileInclude, toClientProfile, toLockedProfile } from '@/lib/profile-db';
 import { profileCreateSchema } from '@/lib/validation';
@@ -11,15 +12,25 @@ import { unlockedProfileId } from '@/lib/profile-unlock';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// The failure is always named: a missing or expired session is a 401 (the page sends the member to the login), a database that cannot
+// be reached is a 503 (the page keeps what it has and offers a retry), and neither is ever answered with an empty profile list.
 export async function GET() {
-  if (!isAuthRuntimeConfigured()) return NextResponse.json({ error: 'Database authentication is not configured', databaseConfigured: false }, { status: 503 });
-  const context = await authenticatedContext();
-  if (!context) return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-  const profiles = await prisma.profile.findMany({ where: { userId: context.userId }, include: profileInclude, orderBy: { createdAt: 'asc' } });
-  // Only the profile whose PIN was verified in this login session shows its personal data or counts as "selected".
-  const unlocked = await unlockedProfileId(context);
-  const visible = profiles.map((profile) => (profile.id === unlocked ? toClientProfile(profile) : toLockedProfile(profile)));
-  return NextResponse.json({ profiles: visible, selectedProfileId: visible.some((profile) => profile.id === unlocked) ? unlocked : null, databaseConfigured: true });
+  const session = await resolveSessionState();
+  if (session.state === 'misconfigured') return NextResponse.json({ error: 'La connexion sécurisée n’est pas configurée sur ce serveur.', code: 'SERVER_MISCONFIGURED', databaseConfigured: false }, { status: 503 });
+  if (session.state === 'unavailable') return NextResponse.json({ error: 'La base de données est momentanément inaccessible. Vos profils ne sont pas supprimés.', code: 'DATABASE_UNAVAILABLE' }, { status: 503 });
+  if (session.state === 'expired') return NextResponse.json({ error: 'Votre session a expiré. Reconnectez-vous.', code: 'SESSION_EXPIRED' }, { status: 401 });
+  if (session.state !== 'authenticated') return NextResponse.json({ error: 'Authentication required', code: 'SESSION_REQUIRED' }, { status: 401 });
+  const context = { userId: session.userId, sid: session.sid };
+  try {
+    const profiles = await prisma.profile.findMany({ where: { userId: context.userId }, include: profileInclude, orderBy: { createdAt: 'asc' } });
+    // Only the profile whose PIN was verified in this login session shows its personal data or counts as "selected".
+    const unlocked = await unlockedProfileId(context);
+    const visible = profiles.map((profile) => (profile.id === unlocked ? toClientProfile(profile) : toLockedProfile(profile)));
+    return NextResponse.json({ profiles: visible, selectedProfileId: visible.some((profile) => profile.id === unlocked) ? unlocked : null, databaseConfigured: true }, { headers: { 'Cache-Control': 'no-store' } });
+  } catch (error) {
+    console.error(`[profiles] loading failed (${(error as { code?: string }).code ?? (error as Error).name ?? 'unexpected error'})`);
+    return NextResponse.json({ error: 'La base de données est momentanément inaccessible. Vos profils ne sont pas supprimés.', code: 'DATABASE_UNAVAILABLE' }, { status: 503 });
+  }
 }
 
 export async function POST(request: Request) {

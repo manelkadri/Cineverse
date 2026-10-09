@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { noStore, requireAccount } from '@/lib/account-api';
 import { unlockCookieName } from '@/lib/profile-unlock';
 import { sessionRevokeSchema } from '@/lib/validation';
+import { notify } from '@/lib/notifications';
+import { sessionsRevoked } from '@/lib/notification-events';
 
 export const runtime = 'nodejs';
 
@@ -22,10 +24,12 @@ export async function DELETE(request: Request) {
     if (!target) return NextResponse.json({ error: 'Session introuvable.', code: 'NOT_FOUND' }, { status: 404 });
     if (target.sessionToken === sid) return NextResponse.json({ error: 'Utilisez « Se déconnecter » pour fermer cette session.', code: 'CURRENT_SESSION' }, { status: 400 });
     await prisma.session.delete({ where: { id: target.id } });
+    await notify(userId, sessionsRevoked('others'));
     return NextResponse.json({ revoked: 1 }, { headers: noStore });
   }
   const all = parsed.data.scope === 'all';
   const result = await prisma.session.deleteMany({ where: { userId, ...(all ? {} : { sessionToken: { not: sid } }) } });
+  if (result.count > 0) await notify(userId, sessionsRevoked(all ? 'all' : 'others')); // for 'all' it is waiting at the next sign-in
   const response = NextResponse.json({ revoked: result.count, signedOut: all }, { headers: noStore });
   if (all) response.cookies.delete(unlockCookieName());
   return response;

@@ -22,6 +22,25 @@ export default function LoginPage() {
       .then((response) => response.json())
       .then((payload) => setConfigured(Boolean(payload.configured)))
       .catch(() => setConfigured(false));
+    const query = new URLSearchParams(window.location.search);
+    if (query.get('reason') === 'expired') setMessage('Votre session a expiré. Reconnectez-vous pour retrouver vos profils.');
+    // Someone who is already signed in does not log in again: they continue to where they were going (the profile screen unless
+    // a profile is already unlocked). Only a session the server confirms counts; an expired or unverifiable one keeps the form.
+    let cancelled = false;
+    fetch('/api/session/state', { cache: 'no-store' })
+      .then((response) => response.json())
+      .then((payload: { state?: string }) => {
+        if (cancelled || payload.state !== 'authenticated') return;
+        // "/" lets the existing gate decide: the homepage when a profile is unlocked, the profile screen otherwise
+        let target = '/';
+        try {
+          const wanted = new URL(query.get('callbackUrl') || '/', window.location.origin);
+          if (wanted.origin === window.location.origin && !wanted.pathname.startsWith('/login')) target = `${wanted.pathname}${wanted.search}`;
+        } catch { /* keep the home route */ }
+        window.location.replace(target);
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
   }, []);
 
   const submit = async (event: React.FormEvent) => {

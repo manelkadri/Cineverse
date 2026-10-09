@@ -10,6 +10,7 @@ import PinCodeInput from '@/components/PinCodeInput';
 import { PinError } from '@/context/ProfileContext';
 import { pinProblem } from '@/lib/pin-rules';
 import CineverseLogo from '@/components/CineverseLogo';
+import { ProfileLoadError, useLoginRedirect } from '@/components/ProfileLoadGuard';
 
 const GENRES = ['Action', 'Animation', 'Aventure', 'Crime', 'Drame', 'Famille', 'Fantastique', 'Mystère', 'Science-fiction', 'Thriller'];
 
@@ -19,7 +20,8 @@ const EMPTY_DRAFT: ProfileDraft = {
 
 export default function ProfilesPage() {
   const router = useRouter();
-  const { profiles, ready, persistenceMode, error: persistenceError, createProfile, updateProfile, deleteProfile, setProfilePin } = useProfiles();
+  const { profiles, ready, loadState, persistenceMode, error: persistenceError, createProfile, updateProfile, deleteProfile, setProfilePin } = useProfiles();
+  const leaving = useLoginRedirect();
   const [managing, setManaging] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingProfile, setEditingProfile] = useState<CineverseProfile | null>(null);
@@ -91,7 +93,7 @@ export default function ProfilesPage() {
     }));
   };
 
-  if (!ready) {
+  if (!ready || leaving) {
     return (
       <main className="grid min-h-screen place-items-center bg-[#050608]">
         <div className="text-center">
@@ -110,7 +112,7 @@ export default function ProfilesPage() {
           <CineverseLogo className="text-[29px]" />
         </button>
         <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${persistenceMode === 'database' ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300' : 'border-amber-400/20 bg-amber-400/[0.08] text-amber-200'}`}>
-          {persistenceMode === 'database' ? 'Synchronisé' : 'Base indisponible'}
+          {persistenceMode === 'database' ? 'Synchronisé' : loadState === 'misconfigured' ? 'Configuration incomplète' : 'Base indisponible'}
         </span>
       </header>
 
@@ -120,7 +122,8 @@ export default function ProfilesPage() {
           <p className="mx-auto mt-3 max-w-lg text-sm text-muted-foreground sm:text-base">
             Choisissez votre profil pour retrouver votre sélection et reprendre vos programmes.
           </p>
-          {(actionError || persistenceError) && <div role="alert" className="mx-auto mt-5 max-w-lg rounded-lg border border-red-500/25 bg-red-500/10 p-3 text-sm text-red-100">{actionError || persistenceError}</div>}
+          {loadState === 'unavailable' || loadState === 'misconfigured' ? <ProfileLoadError className="mt-5" /> : null}
+          {(actionError || (loadState === 'ready' && persistenceError)) && <div role="alert" className="mx-auto mt-5 max-w-lg rounded-lg border border-red-500/25 bg-red-500/10 p-3 text-sm text-red-100">{actionError || persistenceError}</div>}
 
           <div className="mx-auto mt-10 flex max-w-4xl flex-wrap justify-center gap-x-6 gap-y-8 sm:mt-12 sm:gap-x-8">
             {profiles.map((profile) => (
@@ -152,7 +155,7 @@ export default function ProfilesPage() {
               </button>
             ))}
 
-            {profiles.length < 5 && (
+            {loadState === 'ready' && profiles.length < 5 && (
               <button type="button" onClick={openCreate} className="group w-[126px] sm:w-[150px]" aria-label="Créer un profil">
                 <span className="grid aspect-square place-items-center rounded-2xl border-2 border-dashed border-white/20 bg-white/[0.035] text-muted-foreground transition-all duration-300 group-hover:-translate-y-1 group-hover:border-primary group-hover:bg-primary/10 group-hover:text-white">
                   <Plus size={50} strokeWidth={1.35} />
@@ -162,7 +165,7 @@ export default function ProfilesPage() {
             )}
           </div>
 
-          {profiles.length === 0 && (
+          {loadState === 'ready' && profiles.length === 0 && (
             <div className="mx-auto mt-8 max-w-md rounded-xl border border-white/10 bg-white/[0.03] p-5 text-sm text-muted-foreground">
               Aucun profil pour le moment. Créez votre premier profil pour commencer.
             </div>

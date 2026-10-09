@@ -19,12 +19,16 @@ export class PinError extends Error {
   }
 }
 
+export type ProfileLoadState = 'loading' | 'ready' | 'unauthenticated' | 'expired' | 'unavailable' | 'misconfigured';
+
 interface ProfileContextValue {
   profiles: CineverseProfile[];
   /** The profile unlocked in this login session, if any. */
   selectedProfile: CineverseProfile | null;
   selectedProfileId: string | null;
   ready: boolean;
+  /** Why the profiles are (not) shown: loaded, signed out, session expired, database unreachable, or server misconfigured. */
+  loadState: ProfileLoadState;
   persistenceMode: 'database' | 'unavailable';
   error: string | null;
   /** Verifies the PIN on the server; on success the profile is unlocked and selected. */
@@ -78,40 +82,71 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const [profiles, setProfiles] = useState<CineverseProfile[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
-  const [persistenceMode, setPersistenceMode] = useState<'database' | 'unavailable'>('unavailable');
+  const [loadState, setLoadState] = useState<ProfileLoadState>('loading');
   const [error, setError] = useState<string | null>(null);
+  const persistenceMode: 'database' | 'unavailable' = loadState === 'ready' ? 'database' : 'unavailable';
 
-  const hydrateProfiles = useCallback(async () => {
-    if (status !== 'authenticated') return;
-    try {
-      const response = await fetch('/api/profiles', { cache: 'no-store' });
-      const payload = await responseJson<{ profiles: CineverseProfile[]; selectedProfileId?: string | null }>(response);
-      setProfiles(payload.profiles);
-      setSelectedProfileId(payload.selectedProfileId ?? null);
-      setPersistenceMode('database');
-      setError(null);
-    } catch (requestError) {
+  // Says WHY profiles could not be shown. A missing session sends the member to the login, but a database that cannot be reached is
+  // never mistaken for "no profiles": what is already on screen (profiles, selected profile) is kept and only an error is added.
+  const fail = useCallback((state: Exclude<ProfileLoadState, 'loading' | 'ready'>, message: string | null) => {
+    if (state === 'unauthenticated' || state === 'expired') {
       setProfiles([]);
       setSelectedProfileId(null);
-      setPersistenceMode('unavailable');
-      setError(requestError instanceof Error ? requestError.message : 'Base de données indisponible.');
+    }
+    setLoadState(state);
+    setError(message);
+  }, []);
+
+  const hydrateProfiles = useCallback(async () => {
+    try {
+      const response = await fetch('/api/profiles', { cache: 'no-store' });
+      const payload = await response.json().catch(() => ({})) as { profiles?: CineverseProfile[]; selectedProfileId?: string | null; error?: string; code?: string };
+      if (response.ok && Array.isArray(payload.profiles)) {
+        setProfiles(payload.profiles);
+        setSelectedProfileId(payload.selectedProfileId ?? null);
+        setLoadState('ready');
+        setError(null);
+      } else if (response.status === 401) {
+        fail(payload.code === 'SESSION_EXPIRED' ? 'expired' : 'unauthenticated', payload.error ?? null);
+      } else if (payload.code === 'SERVER_MISCONFIGURED') {
+        fail('misconfigured', payload.error ?? 'La connexion sécurisée n’est pas configurée sur ce serveur.');
+      } else {
+        fail('unavailable', payload.error ?? 'La base de données est momentanément inaccessible. Vos profils ne sont pas supprimés.');
+      }
+    } catch {
+      fail('unavailable', 'Connexion impossible. Vérifiez votre réseau : vos profils ne sont pas supprimés.');
     } finally {
       setReady(true);
     }
-  }, [status]);
+  }, [fail]);
 
   useEffect(() => {
     if (status === 'loading') return;
-    if (status === 'unauthenticated') {
-      setProfiles([]);
-      setSelectedProfileId(null);
-      setPersistenceMode('unavailable');
-      setReady(true);
+    if (status === 'authenticated') {
+      setReady(false);
+      setLoadState('loading');
+      void hydrateProfiles();
       return;
     }
-    setReady(false);
-    void hydrateProfiles();
-  }, [hydrateProfiles, status]);
+    // The browser's session check found nothing. That can mean "signed out", "session expired" or "the database could not be asked",
+    // so the server is asked which one it is (the answer needs no database when there is no cookie at all).
+    let cancelled = false;
+    void (async () => {
+      let state = 'unauthenticated';
+      try {
+        const response = await fetch('/api/session/state', { cache: 'no-store' });
+        state = ((await response.json()) as { state?: string }).state ?? 'unauthenticated';
+      } catch { state = 'unavailable'; }
+      if (cancelled) return;
+      if (state === 'authenticated') await hydrateProfiles();
+      else if (state === 'expired') fail('expired', 'Votre session a expiré. Reconnectez-vous.');
+      else if (state === 'unavailable') fail('unavailable', 'La base de données est momentanément inaccessible. Vos profils ne sont pas supprimés.');
+      else if (state === 'misconfigured') fail('misconfigured', 'La connexion sécurisée n’est pas configurée sur ce serveur.');
+      else fail('unauthenticated', null);
+      setReady(true);
+    })();
+    return () => { cancelled = true; };
+  }, [hydrateProfiles, fail, status]);
 
   const unlockProfile = useCallback(async (id: string, pin: string) => {
     const payload = await pinRequest<{ profile: CineverseProfile; selectedProfileId: string }>(`/api/profiles/${encodeURIComponent(id)}/unlock`, {
@@ -206,9 +241,9 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
 
   const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId && !profile.locked) ?? null;
   const value = useMemo(() => ({
-    profiles, selectedProfile, selectedProfileId, ready, persistenceMode, error, unlockProfile, setProfilePin, clearSelectedProfile,
+    profiles, selectedProfile, selectedProfileId, ready, loadState, persistenceMode, error, unlockProfile, setProfilePin, clearSelectedProfile,
     refreshProfiles: hydrateProfiles, createProfile, updateProfile, deleteProfile, toggleWatchlist, toggleFavorite, updateProgress,
-  }), [profiles, selectedProfile, selectedProfileId, ready, persistenceMode, error, unlockProfile, setProfilePin, clearSelectedProfile, hydrateProfiles, createProfile, updateProfile, deleteProfile, toggleWatchlist, toggleFavorite, updateProgress]);
+  }), [profiles, selectedProfile, selectedProfileId, ready, loadState, persistenceMode, error, unlockProfile, setProfilePin, clearSelectedProfile, hydrateProfiles, createProfile, updateProfile, deleteProfile, toggleWatchlist, toggleFavorite, updateProgress]);
 
   return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;
 }

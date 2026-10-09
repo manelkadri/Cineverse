@@ -5,6 +5,8 @@ import { isAuthRuntimeConfigured } from '@/lib/auth-security';
 import { AuthRateLimitError, pinIdentity, releasePinAttempt, reservePinAttempt, upgradeProfilePinHash, verifyProfilePin } from '@/lib/profile-pin';
 import { grantProfileUnlock } from '@/lib/profile-session';
 import { pinUnlockSchema } from '@/lib/validation';
+import { notify } from '@/lib/notifications';
+import { pinLockout } from '@/lib/notification-events';
 
 export const runtime = 'nodejs';
 
@@ -17,7 +19,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
   const parsed = pinUnlockSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Le code PIN doit contenir 4 chiffres.', code: 'PIN_FORMAT' }, { status: 400 });
-  const profile = await prisma.profile.findFirst({ where: { id, userId: context.userId }, select: { id: true, profilePinHash: true } });
+  const profile = await prisma.profile.findFirst({ where: { id, userId: context.userId }, select: { id: true, name: true, profilePinHash: true } });
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
   if (!profile.profilePinHash) return NextResponse.json({ error: 'Définissez un code PIN pour ce profil.', code: 'PIN_SETUP_REQUIRED' }, { status: 409 });
 
@@ -27,6 +29,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     reservation = await reservePinAttempt(identity);
   } catch (error) {
     if (!(error instanceof AuthRateLimitError)) throw error;
+    // one notification per lockout window, however many further attempts arrive
+    await notify(context.userId, pinLockout(profile.id, profile.name));
     const minutes = Math.max(1, Math.ceil(error.retryAfterSeconds / 60));
     return NextResponse.json(
       { error: `Trop de tentatives. Réessayez dans ${minutes} minute${minutes > 1 ? 's' : ''}.`, code: 'PIN_LOCKED', retryAfterSeconds: error.retryAfterSeconds },
